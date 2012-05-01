@@ -10,7 +10,7 @@ void segmentsInit();
 
 /*
  * this function get a number and displays number%100 
- * on the seven segments screen
+ * on the two seven segments screen
  */
 void segmentsSetNumber(const INT8 number); 
 
