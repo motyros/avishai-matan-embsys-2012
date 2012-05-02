@@ -12,7 +12,8 @@ typedef struct
 	UINT8	data[BUFFER_SIZE];
 }CyclicBuffer;
 
-void cyclicBufferPut(CyclicBuffer *pBuffer,const UINT8 data);
-UINT8 cyclicBufferGet(CyclicBuffer *pBuffer);
+void cyclicBufferPut(CyclicBuffer * const pBuffer,const UINT8 data);
+UINT8 cyclicBufferGet(CyclicBuffer * const pBuffer);
+void cyclicBufferInit(CyclicBuffer * const pBuffer);
 
 #endif

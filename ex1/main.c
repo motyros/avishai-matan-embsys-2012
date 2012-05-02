@@ -188,6 +188,8 @@ void init()
 	initDrivers();
 		
 	//set init values
+        cyclicBufferInit(&gReadBuffer);
+        cyclicBufferInit(&gWriteBuffer);
 	gLastClockReading = clockGetTime();
 	gInterval = INTERVAL_INIT_VAL;
 	gCounter = COUNTER_INIT_VAL;

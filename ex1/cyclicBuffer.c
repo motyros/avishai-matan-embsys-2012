@@ -1,7 +1,7 @@
 #include "cyclicBuffer.h"
 #include "defs.h"
 
-void cyclicBufferPut(CyclicBuffer *pBuffer,const UINT8 data)
+void cyclicBufferPut(CyclicBuffer * const pBuffer,const UINT8 data)
 {
 	DBG_ASSERT(pBuffer->size < BUFFER_SIZE); 
 	
@@ -10,7 +10,7 @@ void cyclicBufferPut(CyclicBuffer *pBuffer,const UINT8 data)
 	pBuffer->pos = (pBuffer->pos+1)%BUFFER_SIZE; 
 }
 
-UINT8 cyclicBufferGet(CyclicBuffer *pBuffer)
+UINT8 cyclicBufferGet(CyclicBuffer * const pBuffer)
 {
 	DBG_ASSERT(pBuffer->size > 0)	
 	
@@ -18,4 +18,10 @@ UINT8 cyclicBufferGet(CyclicBuffer *pBuffer)
 	pBuffer->size--;
 
 	return result;
+}
+
+void cyclicBufferInit(CyclicBuffer * const pBuffer)
+{
+    *pBuffer->size = 0;
+    *pBuffer->pos = 0;
 }
