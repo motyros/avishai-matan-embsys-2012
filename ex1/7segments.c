@@ -23,23 +23,23 @@
 #define RIGHT_7SEGMENT_BIT 0x00
 #define SEGMENTS_ADDR 0x104
 
-INT8 digitsMasks[] = {DIGIT_0,DIGIT_1,DIGIT_2,DIGIT_3,DIGIT_4,DIGIT_5,DIGIT_6,DIGIT_7,DIGIT_8,DIGIT_9,DIGIT_A,DIGIT_B,DIGIT_C,DIGIT_D,DIGIT_E,DIGIT_F};
+UINT8 digitsMasks[] = {DIGIT_0,DIGIT_1,DIGIT_2,DIGIT_3,DIGIT_4,DIGIT_5,DIGIT_6,DIGIT_7,DIGIT_8,DIGIT_9,DIGIT_A,DIGIT_B,DIGIT_C,DIGIT_D,DIGIT_E,DIGIT_F};
 
 void segmentsInit()
 {
     segmentsSetNumber(0);
 }
 
-void segmentsSetNumber(const INT8 number)
+void segmentsSetNumber(const UINT8 number)
 {
     
-    const INT8 rightDigit = number & 0x0f;
-    const INT8 leftDigit = (number >> 4) & 0x0f;
+    const UINT8 rightDigit = digitsMasks[number & 0x0f];
+    const UINT8 leftDigit = digitsMasks[(number >> 4) & 0x0f];
 
     //set the left digit display
-    _sr(digitsMasks[leftDigit] | LEFT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
+    _sr(leftDigit | LEFT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
 
     //set the right digit display
-    _sr(digitsMasks[rightDigit] | RIGHT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
+    _sr(rightDigit | RIGHT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
 }
 
