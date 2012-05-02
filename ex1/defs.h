@@ -24,7 +24,11 @@
 
 #define BIT(n) (1<<n)
 
+#ifdef DBG
+#define DBG_ASSERT(cond) if (!(cond)) _ASM("BRK_S");
+#else
 #define DBG_ASSERT(cond)
+#end
 
 #endif
 

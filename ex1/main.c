@@ -186,7 +186,7 @@ void initDrivers()
 void init()
 {
 	initDrivers();
-		
+        
 	//set init values
         cyclicBufferInit(&gReadBuffer);
         cyclicBufferInit(&gWriteBuffer);

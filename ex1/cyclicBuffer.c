@@ -22,6 +22,6 @@ UINT8 cyclicBufferGet(CyclicBuffer * const pBuffer)
 
 void cyclicBufferInit(CyclicBuffer * const pBuffer)
 {
-    *pBuffer->size = 0;
-    *pBuffer->pos = 0;
+    pBuffer->size = 0;
+    pBuffer->pos = 0;
 }
