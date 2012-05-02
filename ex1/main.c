@@ -41,58 +41,72 @@ void checkClock()
 	}
 }
 
-UINT8 asciiToDigit(char digit)
+STATUS asciiToDigit(char digit,UINT8 *pDigit)
 {
-	if (digit >= '0' && digit <= '9')
+	
+    do
+    {
+        if (digit >= '0' && digit <= '9')
 	{
-		return digit-'0';
+		*pDigit =  digit-'0';
+                break;
 	}
 
 	if (digit >= 'a' && digit <= 'f')
 	{
-		return 10 + digit-'a';
+		*pDigit =  10 + digit-'a';
+                break;
 	}
 
 	if (digit >= 'A' && digit <= 'F')
 	{
-		return 10 + digit-'A';
+		*pDigit =  10 + digit-'A';
+                break;
 	} 
 	
 	return STATUS_ERROR;
+    }while(FALSE);
+
+    return STATUS_SUCCESS;
 	
 }
 
 char digitToAscii(UINT8 digit)
 {
-	if (digit <= 0x9)
-	{
-		return digit+'0';
-	}
+    
+    DBG_ASSERT(digit <= 0xf);
 
-	if (digit >= 0xa && digit <= 0xf)
-	{
-		return digit -10 +'A';
-	}
-	
-	return STATUS_ERROR;
-	
+    if (digit <= 0x9)
+    {
+	return  digit+'0';
+    }
+
+    return digit -10 +'A';
 }
+
 void handleProtocolMessage()
 {
 	UINT8 commandByte = cyclicBufferGet(&gReadBuffer);
 	UINT8 variableByte = cyclicBufferGet(&gReadBuffer);
-	UINT8 valueDigit1 = asciiToDigit(cyclicBufferGet(&gReadBuffer));
-	UINT8 valueDigit2 = asciiToDigit(cyclicBufferGet(&gReadBuffer));
+	UINT8 valueDigit1,valueDigit2;
+
 
 	STATUS status = STATUS_ERROR;
+
 	do
 	{
-		if (valueDigit1 == STATUS_ERROR || valueDigit2 == STATUS_ERROR)
-		{
-			break;
-		}
 
-		UINT8 returnVal;
+            if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit1) != STATUS_SUCCESS)
+            {
+                break;
+            }
+
+            if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit2) != STATUS_SUCCESS)                                                                                                                                                  
+            {                                                                                                                                                                                                                                 
+                break;                                                                                                                                                                                                                        
+            }
+    
+	       	UINT8 returnVal;
 		UINT8 valueWord = valueDigit1;
 		valueWord = (valueWord << 4) +  valueDigit2;
 
