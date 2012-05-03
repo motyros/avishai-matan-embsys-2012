@@ -87,7 +87,7 @@ void uartSetBaudRate(const UINT16 rate)
 
 void uartInit()
 {
-	
+
 	int i;
 	UINT8 *pData = (UINT8*)gpUart;
 

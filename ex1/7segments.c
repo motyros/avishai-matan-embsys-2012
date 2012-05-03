@@ -27,19 +27,19 @@ UINT8 digitsMasks[] = {DIGIT_0,DIGIT_1,DIGIT_2,DIGIT_3,DIGIT_4,DIGIT_5,DIGIT_6,D
 
 void segmentsInit()
 {
-    segmentsSetNumber(0);
+	segmentsSetNumber(0);
 }
 
 void segmentsSetNumber(const UINT8 number)
 {
     
-    const UINT8 rightDigit = digitsMasks[number & 0x0f];
-    const UINT8 leftDigit = digitsMasks[(number >> 4) & 0x0f];
+	const UINT8 rightDigit = digitsMasks[number & 0x0f];
+	const UINT8 leftDigit = digitsMasks[(number >> 4) & 0x0f];
 
-    //set the left digit display
-    _sr(leftDigit | LEFT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
+	//set the left digit display
+	_sr(leftDigit | LEFT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
 
-    //set the right digit display
-    _sr(rightDigit | RIGHT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
+	//set the right digit display
+	_sr(rightDigit | RIGHT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
 }
 

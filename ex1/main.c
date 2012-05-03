@@ -96,15 +96,15 @@ void handleProtocolMessage()
 	do
 	{
 
-            if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit1) != STATUS_SUCCESS)
-            {
-                break;
-            }
+		if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit1) != STATUS_SUCCESS)
+		{
+			break;
+		}
 
-            if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit2) != STATUS_SUCCESS)                                                                                                                                                  
-            {                                                                                                                                                                                                                                 
-                break;                                                                                                                                                                                                                        
-            }
+		if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit2) != STATUS_SUCCESS)
+		{
+			break;
+		}
     
 	       	UINT8 returnVal;
 		UINT8 valueWord = valueDigit1;
@@ -148,7 +148,7 @@ void handleProtocolMessage()
 	{
 		cyclicBufferPut(&gWriteBuffer,'Z');	
 	}
-	
+
 	return;
 	
 }
