@@ -3,6 +3,7 @@
 
 void cyclicBufferPut(CyclicBuffer * const pBuffer,const UINT8 data)
 {
+    DBG_ASSERT(pBuffer != NULL);
 	DBG_ASSERT(pBuffer->size < BUFFER_SIZE); 
 	
 	pBuffer->data[pBuffer->pos] = data;
@@ -12,9 +13,9 @@ void cyclicBufferPut(CyclicBuffer * const pBuffer,const UINT8 data)
 
 UINT8 cyclicBufferGet(CyclicBuffer * const pBuffer)
 {
+    DBG_ASSERT(pBuffer != NULL);
 	DBG_ASSERT(pBuffer->size > 0)	
-	
-	UINT8 result = pBuffer->data[(pBuffer->pos - pBuffer->size) % BUFFER_SIZE];
+	UINT8 result = pBuffer->data[(pBuffer->pos - pBuffer->size + BUFFER_SIZE) % BUFFER_SIZE];
 	pBuffer->size--;
 
 	return result;

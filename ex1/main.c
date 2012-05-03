@@ -196,6 +196,7 @@ void init()
 	segmentsSetNumber(gCounter);
 
 }
+
 void main(void)
 {
 	//init drivers and components
