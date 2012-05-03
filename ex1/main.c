@@ -142,9 +142,7 @@ void handleProtocolMessage()
 		cyclicBufferPut(&gWriteBuffer, digitToAscii(returnVal & 0x0F));
 		status = STATUS_SUCCESS;
       
-		break;
-
-	}while(FALSE);
+	 }while(FALSE);
 	
 	if (status == STATUS_ERROR)
 	{
