@@ -141,7 +141,8 @@ void handleProtocolMessage()
 		//write back the 4 LSB
 		cyclicBufferPut(&gWriteBuffer, digitToAscii(returnVal & 0x0F));
 		status = STATUS_SUCCESS;
-		
+      
+		break;
 
 	}while(FALSE);
 	
