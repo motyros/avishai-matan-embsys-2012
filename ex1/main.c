@@ -11,18 +11,27 @@ UINT8 gCounter;
 CyclicBuffer gReadBuffer;
 CyclicBuffer gWriteBuffer;
 
+//define init values
 #define COUNTER_INIT_VAL 0
 #define INTERVAL_INIT_VAL 100
+//define the size of a messeage
 #define PROTOCOL_MSG_SIZE 4
 
 
-
+/*
+ * Updates the counter and increase it by one,
+ * and it updates the 7-segments to the new counter.
+ */
 void updateCounter()
 {
 	++gCounter;
 	segmentsSetNumber(gCounter);
 }
 
+/*
+ * Checks if the colck has moved forward (modolo max UINT32) for gInterval,
+ * and updates the couter and the 7-segments device.
+ */
 void checkClock()
 {
 	UINT32 currentClock = clockGetTime();
@@ -33,7 +42,6 @@ void checkClock()
 		((currentClock > gLastClockReading) && (currentClock - gLastClockReading >= gInterval)) ||
 		//clock overlaps
 		((gLastClockReading > currentClock) && (currentClock + (MAX_UINT32 - gLastClockReading) >= gInterval)) 
-
 		)
 	{
 		updateCounter();
@@ -41,6 +49,10 @@ void checkClock()
 	}
 }
 
+/*
+ * Converts the given char to a hex digit.
+ * Return STATUS_SUCCESS on legal hex digit, and STATUS_ERROR otherwise.
+ */
 STATUS asciiToDigit(char digit,UINT8 *pDigit)
 {
 	
@@ -71,6 +83,10 @@ STATUS asciiToDigit(char digit,UINT8 *pDigit)
 	
 }
 
+/*
+ * Convert the given digit to a hex char.
+ * the method assumes that the UINT digit is not bigger then 0xf, the biggest digit in hex.
+ */
 char digitToAscii(UINT8 digit)
 {
     
@@ -84,18 +100,21 @@ char digitToAscii(UINT8 digit)
     return digit -10 +'A';
 }
 
+/*
+ * Handles aמ incomming message in the Uart protocol.
+ */
 void handleProtocolMessage()
 {
+  //gets the command char and the variable char fromthe buffer
 	UINT8 commandByte = cyclicBufferGet(&gReadBuffer);
 	UINT8 variableByte = cyclicBufferGet(&gReadBuffer);
 	UINT8 valueDigit1,valueDigit2;
-
 
 	STATUS status = STATUS_ERROR;
 
 	do
 	{
-
+     //checks if the given value us a legal hex digit
 		if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit1) != STATUS_SUCCESS)
 		{
 			break;
@@ -106,23 +125,27 @@ void handleProtocolMessage()
 			break;
 		}
     
-	       	UINT8 returnVal;
+	  UINT8 returnVal;
 		UINT8 valueWord = valueDigit1;
 		valueWord = (valueWord << 4) +  valueDigit2;
-
+      
+      //"rt00"
 		if (commandByte == 'r' && variableByte == 't' && (valueWord == 0x0))
 		{
 			returnVal = gInterval;
 		}
+      //"rc00"
 		else if (commandByte == 'r' && variableByte == 'c' && (valueWord == 0x0))
 		{
 			returnVal = gCounter;
 		}
+      //"wtVV"
 		else if (commandByte == 'w' && variableByte == 't')
 		{
 			gInterval = valueWord;
 			returnVal = 0x0;
 		}
+      //"wcVV"
 		else if (commandByte == 'w' && variableByte == 'c')
 		{
 			gCounter = valueWord;
@@ -130,6 +153,7 @@ void handleProtocolMessage()
 		}
 		else
 		{
+      //Illegal command / variable / value
 			break;
 		}
 		//write back the chars as upper case
@@ -153,8 +177,12 @@ void handleProtocolMessage()
 	
 }
 
+/*
+ * Handles the Uart protocol.
+ */
 void checkUart()
 {
+  //checks if ready to read
 	if (uartReadyToRead())
 	{
 		//1. read
@@ -166,12 +194,16 @@ void checkUart()
 		}
 	}
 
+  //checks if ready to write
 	if (gWriteBuffer.size > 0 && uartReadyToWrite())
 	{
 		uartWriteByte(cyclicBufferGet(&gWriteBuffer));		
 	}
 }
 
+/*
+ * Initilizes the drivers of all devices.
+ */
 void initDrivers()
 {
 	clockInit();
@@ -208,6 +240,5 @@ void main(void)
 		checkClock();
 		//check if a request has arrived and handle it
 		checkUart();
-	
 	}
 }
