@@ -35,10 +35,10 @@ void segmentsInit()
 //sets the 7-segments to the given number
 void segmentsSetNumber(const UINT8 number)
 {
-  //the 4 first digits    
-	const UINT8 rightDigit = digitsMasks[number & 0x0f];
+  //the 4 first digits
+  const UINT8 rightDigit = digitsMasks[number & 0x0f];
   //the 4 last digits
-	const UINT8 leftDigit = digitsMasks[(number >> 4) & 0x0f];
+  const UINT8 leftDigit = digitsMasks[(number >> 4) & 0x0f];
 
 	//set the left digit display
 	_sr(leftDigit | LEFT_7SEGMENT_BIT, SEGMENTS_ADDR) ;
