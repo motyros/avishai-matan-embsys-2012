@@ -26,13 +26,17 @@
 //array of all the hex digits
 UINT8 digitsMasks[] = {DIGIT_0,DIGIT_1,DIGIT_2,DIGIT_3,DIGIT_4,DIGIT_5,DIGIT_6,DIGIT_7,DIGIT_8,DIGIT_9,DIGIT_A,DIGIT_B,DIGIT_C,DIGIT_D,DIGIT_E,DIGIT_F};
 
-//initilize the 7-segments to "00"
+/*
+ * Initilize the two 7-segments screen to "00"
+ */
 void segmentsInit()
 {
 	segmentsSetNumber(0);
 }
 
-//sets the 7-segments to the given number
+/*
+ * Sets the two 7-segments to the given number%100
+ */
 void segmentsSetNumber(const UINT8 number)
 {
   //the 4 first digits
