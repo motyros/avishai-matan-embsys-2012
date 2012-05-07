@@ -7,7 +7,7 @@
 #define UART_BAUD_RATE 19200
 
 
-
+//pack the struct with no internal spaces
 #pragma pack(1)
 typedef struct
 {
@@ -70,21 +70,29 @@ typedef struct
 #pragma pack()
 
 
-
+//cost the UART_BASE_ADDR to the UartRegs struct 
 UartRegs *gpUart = (UartRegs*)(UART_BASE_ADDR);
 
+/*
+ * Sets the raud range to the given rate
+ */
 void uartSetBaudRate(const UINT16 rate)
 {
+	//finding the divisorLatch
 	UINT16 divisorLatch = UART_MAX_BAUD_RATE / rate;
 	
+	//turn on the DLAB bit
 	gpUart->LCR.bits.dlab = 1;
-
+	//set the DLL and the DLH registers
 	gpUart->REG0.DLL = divisorLatch & 0xFF;
 	gpUart->REG1.DLH = divisorLatch>>8;
-	
+	//turn off the DLAB bit
 	gpUart->LCR.bits.dlab = 0;
 }
 
+/*
+ * Initilize the Uart
+ */
 void uartInit()
 {
 
@@ -105,21 +113,35 @@ void uartInit()
 	gpUart->LCR.bits.wordLength = 0x3;
 }
 
+/*
+ * Return "TURE" (in defs.h) if the bit in LSR for dataReady, is on.
+ * retun "FALSE" otherwise.
+ */
 BOOL uartReadyToRead()
 {
 	return gpUart->LSR.bits.dataReady;
 }
 
+/*
+ * Return the byte that stores in the RBR register.
+ */
 UINT8 uartReadByte()
 {
 	return gpUart->REG0.RBR;
 }
 
+/*
+ * Return "TURE" (in defs.h) if the bit in LSR for thrIsEmpty, is on.
+ * retun "FALSE" otherwise.
+ */
 BOOL uartReadyToWrite()
 {
 	return gpUart->LSR.bits.thrIsEmpty;
 }
 
+/*
+ * Writes the byte to the THR register.
+ */
 void uartWriteByte(const UINT8 byte)
 {
 	gpUart->REG0.THR = byte;
