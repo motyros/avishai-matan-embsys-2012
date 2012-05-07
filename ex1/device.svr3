@@ -1,10 +1,5 @@
-/////////////////////////////////////////////////////
-// device.svr3
-//  Memory mapping file
-/////////////////////////////////////////////////////
+//memory mapping file. file format taken from lecture 3 slides (Embedded Systems Building)
 
-
-// hardware
 ROM_START = 0x0;
 ROM_SIZE = 8K;
 SRAM_START = 0x80000;
@@ -17,7 +12,6 @@ MEMORY {
 
 INITDATA !data
 
-// section mapping
 SECTIONS {
     GROUP: {
         * (TEXT) : {}
