@@ -105,7 +105,7 @@ char digitToAscii(UINT8 digit)
  */
 void handleProtocolMessage()
 {
-  //gets the command char and the variable char fromthe buffer
+  	//gets the command char and the variable char fromthe buffer
 	UINT8 commandByte = cyclicBufferGet(&gReadBuffer);
 	UINT8 variableByte = cyclicBufferGet(&gReadBuffer);
 	UINT8 valueDigit1,valueDigit2;
@@ -114,7 +114,7 @@ void handleProtocolMessage()
 
 	do
 	{
-     //checks if the given value us a legal hex digit
+    		//checks if the given value us a legal hex digit
 		if (asciiToDigit(cyclicBufferGet(&gReadBuffer),&valueDigit1) != STATUS_SUCCESS)
 		{
 			break;
@@ -129,23 +129,23 @@ void handleProtocolMessage()
 		UINT8 valueWord = valueDigit1;
 		valueWord = (valueWord << 4) +  valueDigit2;
       
-      //"rt00"
+      		//"rt00"
 		if (commandByte == 'r' && variableByte == 't' && (valueWord == 0x0))
 		{
 			returnVal = gInterval;
 		}
-      //"rc00"
+      		//"rc00"
 		else if (commandByte == 'r' && variableByte == 'c' && (valueWord == 0x0))
 		{
 			returnVal = gCounter;
 		}
-      //"wtVV"
+      		//"wtVV"
 		else if (commandByte == 'w' && variableByte == 't')
 		{
 			gInterval = valueWord;
 			returnVal = 0x0;
 		}
-      //"wcVV"
+     		//"wcVV"
 		else if (commandByte == 'w' && variableByte == 'c')
 		{
 			gCounter = valueWord;
@@ -153,7 +153,7 @@ void handleProtocolMessage()
 		}
 		else
 		{
-      //Illegal command / variable / value
+      			//Illegal command / variable / value
 			break;
 		}
 		//write back the chars as upper case
@@ -182,7 +182,7 @@ void handleProtocolMessage()
  */
 void checkUart()
 {
-  //checks if ready to read
+  	//checks if ready to read
 	if (uartReadyToRead())
 	{
 		//1. read
@@ -194,7 +194,7 @@ void checkUart()
 		}
 	}
 
-  //checks if ready to write
+  	//checks if ready to write
 	if (gWriteBuffer.size > 0 && uartReadyToWrite())
 	{
 		uartWriteByte(cyclicBufferGet(&gWriteBuffer));		
@@ -224,7 +224,6 @@ void init()
 	gLastClockReading = clockGetTime();
 	gInterval = INTERVAL_INIT_VAL;
 	gCounter = COUNTER_INIT_VAL;
-
 	segmentsSetNumber(gCounter);
 
 }
