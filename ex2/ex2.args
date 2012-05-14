@@ -1,0 +1,14 @@
+-toggle=include_local_symbols=1
+-initiallog=logfile
+-profile
+-sim
+-a6
+-toggle=deadbeef=1
+-Xtimer0
+-simextp=/cs/course/current/embsys/ARC/MetaWare/arc/bin/embsys_pager.so
+-simextp=/cs/course/current/embsys/ARC/MetaWare/arc/bin/embsys_7segments.so
+-simextp=/cs/course/current/embsys/ARC/MetaWare/arc/bin/embsys_flash.so
+-simextp=/cs/course/current/embsys/ARC/MetaWare/arc/bin/embsys_uart.so
+-simextp=/cs/course/current/embsys/ARC/MetaWare/arc/bin/embsys_halt.so
+-simextp=/cs/course/current/embsys/ARC/MetaWare/arc/bin/embsys_clock.so
+-mem=0
