@@ -27,6 +27,7 @@ void buttonPressedIsr()
 result_t ip_init(void (*button_pressed_cb)(button))
 {
   gpButtonPressedCB = button_pressed_cb;
+  ip_disable();
 }
 
 void ip_enable(void)
