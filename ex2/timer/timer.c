@@ -14,9 +14,9 @@
 
 #define NUM_OF_TIMERS 2
 
-uint32_t gCountRegAddr[] 	= 	{TIMER0_COUNT_ADDR,		TIMER1_COUNT_ADDR};
+uint32_t gCountRegAddr[] 	= 	{TIMER0_COUNT_ADDR,	TIMER1_COUNT_ADDR};
 uint32_t gControlRegAddr[] 	= 	{TIMER0_CONTROL_ADDR,	TIMER1_CONTROL_ADDR};
-uint32_t gLimitRegAddr[] 	= 	{TIMER0_LIMIT_ADDR,		TIMER1_LIMIT_ADDR};
+uint32_t gLimitRegAddr[] 	= 	{TIMER0_LIMIT_ADDR,	TIMER1_LIMIT_ADDR};
 
 typedef struct
 {
@@ -27,7 +27,7 @@ typedef struct
 		{
 			uint32_t IE 		: 1;
 			uint32_t NH 		: 1;
-			uint32_t W			: 1;
+			uint32_t W		: 1;
 			uint32_t IP 		: 1;
 			uint32_t reserve 	: 28;
 		}bits;
@@ -40,18 +40,18 @@ typedef struct
 
 Timer gTimers[NUM_OF_TIMERS];
 
-void timerInit()
+/*void timer_init()
 {
 	int i;
-	for(i = 0 ; i <= NUM_OF_TIMERS ; ++i)
+	for(i = 0 ; i < NUM_OF_TIMERS ; ++i)
 	{
 		_sr(0,gCountRegAddr[i]);
 		_sr(0,gControlRegAddr[i]);
 		_sr(0,gLimitRegAddr[i]);
-		gTimers[i].data = 0;
+		gTimers[i].control.data = 0;
 	}
 }
-
+*/
 
 void handleTimerExpiration(uint32_t timerIndex)
 {
@@ -59,27 +59,31 @@ void handleTimerExpiration(uint32_t timerIndex)
 	{
 		gTimers[timerIndex].control.bits.IE = 0;
 	}
+        else
+        {
+            //gTimers[timerIndex].control.bits.IE = 1;
+        }
 	
 	_sr(gTimers[timerIndex].control.data,gControlRegAddr[timerIndex]);
-	
+	//_sr(0,gCountRegAddr[timerIndex]);
 	gTimers[timerIndex].timerCB();
 
 }
 
-_Interrupt1 void timer0Isr()
+_Interrupt1 void timer0ISR()
 {
 	handleTimerExpiration(0);
 }
 
-_Interrupt1 void timer1Isr()
+_Interrupt1 void timer1ISR()
 {
 	handleTimerExpiration(1);
 }
 
 result_t registerTimer(	const uint32_t timerIndex,
-						const uint32_t interval, 
-						const bool oneShot, 
-						const void(*timerCB)(void),
+		       	const uint32_t interval, 
+			const bool oneShot, 
+			void(*timerCB)(void))
 {
 	if (!timerCB)
 	{
@@ -96,6 +100,8 @@ result_t registerTimer(	const uint32_t timerIndex,
 	//2. we want to timer to be advanced even every clock cycle (NH=0)
 	//3. we don't want the Watchdog to be set (W=0)
 	_sr(gTimers[timerIndex].control.data,gControlRegAddr[timerIndex]);
+
+        return OPERATION_SUCCESS;
 	
 	
 	
@@ -103,11 +109,11 @@ result_t registerTimer(	const uint32_t timerIndex,
 
 result_t timer0_register(uint32_t interval, bool one_shot, void(*timer_cb)(void))
 {
-	return registerTimer(0,interval,one_shot,timet_cb);
+	return registerTimer(0,interval,one_shot,timer_cb);
 }
 
 
 result_t timer1_register(uint32_t interval, bool one_shot, void(*timer_cb)(void))
 {
-	return registerTimer(1,interval,one_shot,timet_cb);
+	return registerTimer(1,interval,one_shot,timer_cb);
 }
