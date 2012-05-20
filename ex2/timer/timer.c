@@ -40,35 +40,22 @@ typedef struct
 
 Timer gTimers[NUM_OF_TIMERS];
 
-/*void timer_init()
-{
-	int i;
-	for(i = 0 ; i < NUM_OF_TIMERS ; ++i)
-	{
-		_sr(0,gCountRegAddr[i]);
-		_sr(0,gControlRegAddr[i]);
-		_sr(0,gLimitRegAddr[i]);
-		gTimers[i].control.data = 0;
-	}
-}
-*/
-
 void handleTimerExpiration(uint32_t timerIndex)
 {
+	//disable interrupts if this is one shot timer
 	if (gTimers[timerIndex].oneShot)
 	{
 		gTimers[timerIndex].control.bits.IE = 0;
 	}
-        else
-        {
-            //gTimers[timerIndex].control.bits.IE = 1;
-        }
 	
+	//acknowledge the interrupt
 	_sr(gTimers[timerIndex].control.data,gControlRegAddr[timerIndex]);
-	//_sr(0,gCountRegAddr[timerIndex]);
+
+	//jump to the call back
 	gTimers[timerIndex].timerCB();
 
 }
+
 
 _Interrupt1 void timer0ISR()
 {
@@ -80,6 +67,9 @@ _Interrupt1 void timer1ISR()
 	handleTimerExpiration(1);
 }
 
+/*
+ * this function registers timer
+ */
 result_t registerTimer(	const uint32_t timerIndex,
 		       	const uint32_t interval, 
 			const bool oneShot, 
@@ -92,6 +82,8 @@ result_t registerTimer(	const uint32_t timerIndex,
 	
 	gTimers[timerIndex].timerCB = timerCB;
 	gTimers[timerIndex].oneShot = oneShot;
+	
+	gTimers[timerIndex].control.data = 0;
 	gTimers[timerIndex].control.bits.IE = 1;
 	
 	_sr(0,gCountRegAddr[timerIndex]);
@@ -101,7 +93,7 @@ result_t registerTimer(	const uint32_t timerIndex,
 	//3. we don't want the Watchdog to be set (W=0)
 	_sr(gTimers[timerIndex].control.data,gControlRegAddr[timerIndex]);
 
-        return OPERATION_SUCCESS;
+    return OPERATION_SUCCESS;
 	
 	
 	
