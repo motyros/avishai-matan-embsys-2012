@@ -24,15 +24,23 @@ _Interrupt1 void buttonPressedIsr()
     //if the "i" button is pressed call the CB function
     if((buttonsPressed>>i) & BIT0)
     {
-      gpButtonPressedCB(i);
+      gpButtonPressedCB(0x001 << i);
     }
   }
 }
 
 result_t ip_init(void (*button_pressed_cb)(button))
 {
-  gpButtonPressedCB = button_pressed_cb;
-  ip_disable();
+    if(!button_pressed_cb)
+    {
+        return NULL_POINTER;
+    }
+
+    gpButtonPressedCB = button_pressed_cb;
+    ip_disable();
+
+    return OPERATION_SUCCESS;
+
 }
 
 void ip_enable(void)

@@ -15,10 +15,10 @@ network.o: network/network.c network/network.h
 timer.o: timer/timer.c timer/timer.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o:	main.c timer.o
+main.o:	main.c timer.o input_panel.o
 	mcc -c -a6 -g -w3 $< -o $@   
 
-a.out: main.o timer.o ivt.s device.svr3
+a.out: main.o timer.o input_panel.o ivt.s device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map -Hldopt=-uInterruptTable
 
 7segments_test:
