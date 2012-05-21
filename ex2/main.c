@@ -1,5 +1,6 @@
 #include "timer/timer.h"
 #include "input_panel/input_panel.h"
+#include "LCD/LCD.h"
 
 int gCounter = 0;
 uint32_t gA = 0;
@@ -12,6 +13,10 @@ void incCounter()
 }
 
 button gButton;
+void flushComplete()
+{
+
+}
 
 void buttonPressed(button b)
 {
@@ -24,14 +29,17 @@ void main()
     ip_init(buttonPressed);
     ip_enable();
     _enable();
+    lcd_init(flushComplete);
+    char line[] = {'3',' ','&','m','a'};
+    lcd_set_row(4, true, line, 5);
     while(true)
     {
         //counter
-        //gA = _lr(0x21);
+        gA = _lr(0x21);
         //control
-        //gB = _lr(0x22);
+        gB = _lr(0x22);
         //limit
-        //gC = _lr(0x23);
+        gC = _lr(0x23);
         gA = gA+1;
     }
 }

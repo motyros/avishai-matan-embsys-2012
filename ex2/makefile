@@ -1,4 +1,4 @@
-all: 
+all: flash.o input_panel.o LCD.o timer.o main.o a.out
 
 flash.o: flash/flash.c flash/flash.h
 	mcc -c -a6 -g -w3 $< -o $@
@@ -15,10 +15,10 @@ network.o: network/network.c network/network.h
 timer.o: timer/timer.c timer/timer.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o:	main.c timer.o input_panel.o
+main.o:	main.c timer.o LCD.o input_panel.o
 	mcc -c -a6 -g -w3 $< -o $@   
 
-a.out: main.o timer.o input_panel.o ivt.s device.svr3
+a.out: main.o timer.o LCD.o input_panel.o ivt.s device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map -Hldopt=-uInterruptTable
 
 7segments_test:
@@ -27,7 +27,7 @@ tar:
 	tar cvf avishl02_matanp01 ... device.svr3 makefile README
 
 clean: 
-	rm -f a.out main.o flash.o input_panel.o LCD.o network.o timer.o
+	rm -f a.out main.o flash.o input_panel.o LCD.o network.o timer.o ivt.o
 
 test: clean all tar
 	~embsys/ARC/MetaWare/arc/bin/embsys_check_ex2.sh avishl02_matanp01

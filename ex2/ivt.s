@@ -12,7 +12,14 @@ InterruptTable:
 	jal 	BAD_INSTRUCTION_ISR 	; IRQ 6	
 	jal 	timer1ISR          	; IRQ 7
 	jal     BAD_INSTRUCTION_ISR     ; IRQ 8
-	jal     buttonPressedIsr     ; IRQ 9     
+	jal     buttonPressedIsr     	; IRQ 9
+	jal     BAD_INSTRUCTION_ISR     ; IRQ 10
+	jal     BAD_INSTRUCTION_ISR     ; IRQ 11
+	jal     BAD_INSTRUCTION_ISR     ; IRQ 12
+	jal     BAD_INSTRUCTION_ISR     ; IRQ 13
+	jal     BAD_INSTRUCTION_ISR     ; IRQ 14
+	jal     lcdDisplayISR  		; IRQ 15
+	  
 
 MEM_ERROR_ISR:
 BAD_INSTRUCTION_ISR:
