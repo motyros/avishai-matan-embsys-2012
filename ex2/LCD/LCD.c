@@ -6,7 +6,9 @@
 #define LCD_DIER_ADDR 0x1F2
 #define LCD_DICR_ADDR 0x1F3
 #define BIT0 1
+#define SELECTED_BIT 7
 #define INIT_CHAR ' '
+
 
 void (*gpFlushCompleteCB)(void);
 
@@ -57,7 +59,7 @@ result_t lcd_init(void (*flush_complete_cb)(void))
 
 result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8_t length)
 {
-	uint32_t i;
+	uint32_t i,bitSelected=0;
 	if(!line)
 	{
 		return NULL_POINTER;
@@ -79,13 +81,17 @@ result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8
 		return OPERATION_SUCCESS;
 	}
 
+	if(selected)
+	{
+		bitSelected = BIT0<<SELECTED_BIT;	
+	}
 	//note:row_number starts from 0
 	uint32_t rowBytesOffset = LCD_LINE_LENGTH * row_number;
 	
 	//write the data to the gLcdData array
 	for(i=0 ; i<length ; ++i)
 	{	
-		gLcdData[rowBytesOffset+i] = line[i];
+		gLcdData[rowBytesOffset+i] = line[i] | bitSelected;
 	}
 
 	//write the LCD data address to the DBUF register
