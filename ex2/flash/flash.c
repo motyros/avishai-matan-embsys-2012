@@ -21,9 +21,6 @@ typedef struct
 	uint8_t data[MAX_REQUEST_BUFFER_SIZE];
 }FlashBuffer;
 
-FlashBuffer gReadBuffer;
-FlashBuffer gWriteBuffer;
-
 union
 {
 	uint32_t data;
@@ -62,7 +59,11 @@ typedef enum
 void (*gpFlashDataReciveCB)(uint8_t const *,uint32_t);
 void (*gpFlashRequestDoneCB)(void);
 
+FlashBuffer gReadBuffer;
+FlashBuffer gWriteBuffer;
+
 SPICommand gCurrentCommand;
+bool gReadToInternalBuffer;
 
 uint32_t gFDATA[NUM_OF_DATA_REG];
 
