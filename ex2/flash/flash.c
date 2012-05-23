@@ -73,7 +73,7 @@ _Interrupt1 flashISR()
 	//acknowledge the interrupt
 	
 	//handle the interrupt
-	swith (gCurrentCommand)
+	switch (gCurrentCommand)
 	{
 		case READ_DATA:
 			break;
