@@ -66,25 +66,126 @@ typedef enum
 void (*gpFlashDataReciveCB)(uint8_t const *,uint32_t);
 void (*gpFlashRequestDoneCB)(void);
 
-FlashBuffer gReadBuffer;
-FlashBuffer gWriteBuffer;
+
 
 SPICommand gCurrentCommand;
-bool gReadToInternalBuffer;
 
-uint32_t gFDATA[NUM_OF_DATA_REG];
+FlashBuffer gNonBlockingBuffer;
+uint16_t gNonBlockingOpSize;
+uint16_t gNonBlockingStartAddress;
 
+//FWD declaration
+void loadDataFromRegs(uint8_t buffer[],const uint16_t size);
+void loadDataToRegs(const uint8_t buffer[],const uint16_t size);
+
+
+void startNonBlockingRead()
+{
+
+	uint16_t transactionBytes = MIN(gNonBlockingOpSize-gNonBlockingBuffer.size,DATA_REG_BYTES);
+	FlashControlRegister cr;
+
+	cr.bits.CMD = READ_DATA;
+
+	cr.bits.FDBC = transactionBytes-1;
+
+	cr.bits.SME = 1;
+
+	cr.bits.SCGO = 1;
+
+	_sr(gNonBlockingStartAddress+gNonBlockingBuffer.size,FLASH_ADDRESS_REG_ADDR);
+	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
+
+	gNonBlockingStartAddress+=gNonBlockingBuffer.size;
+
+	...
+	...
+	...
+
+}
+
+void performNonBlockingWrite()
+{
+	uint16_t transactionBytes;
+	FlashControlRegister cr;
+
+	//calculate transaction size in bytes
+	transactionBytes = MIN(gNonBlockingBuffer.size-gNonBlockingOpSize,DATA_REG_BYTES);
+
+	//set command type
+	cr.bits.CMD = PAGE_PROGRAM;
+
+	//set transaction size
+	cr.bits.FDBC = transactionBytes-1;
+
+	//enable interrupts
+	cr.bits.SME = 1;
+
+	//start operation
+	cr.bits.SCGO = 1;
+
+	//read data from the given buffer to data registers
+	loadDataToRegs(gNonBlockingBuffer.data+gNonBlockingOpSize,transactionBytes);
+
+	//set flash write address
+	_sr(gNonBlockingStartAddress+gNonBlockingOpSize,FLASH_ADDRESS_REG_ADDR);
+
+	//advance number of written bytes
+	gNonBlockingOpSize+=transactionBytes;
+
+	//perform writing
+	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
+}
+
+
+bool finishNonBlockingRead()
+{
+	uint16_t transactionBytes = MIN(gNonBlockingOpSize-gNonBlockingBuffer.size,DATA_REG_BYTES);
+
+	loadDataFromRegs(gNonBlockingBuffer.data + gNonBlockingBuffer.size,transactionBytes);
+
+	gNonBlockingBuffer.size+=transactionBytes;
+
+	return gNonBlockingBuffer.size==gNonBlockingOpSize;
+}
 
 _Interrupt1 void flashISR()
 {
 	//acknowledge the interrupt
+	_sr(0x0,FLASH_STATUS_REG_ADDR);
 	
 	//handle the interrupt
 	switch (gCurrentCommand)
 	{
-		case READ_DATA:
+		case READ_DATA: //non-blocking read
+
+			//load data from regs to buffer and check if whole read is done
+			if (finishNonBlockingRead())
+			{
+				gCurrentCommand = IDLE;
+				gpFlashDataReciveCB(gNonBlockingBuffer.data,gNonBlockingBuffer.size);
+
+			}
+			//continue to the next transaction
+			else
+			{
+				startNonBlockingRead();
+			}
 			break;
-		case PAGE_PROGRAM:
+
+		case PAGE_PROGRAM: //non-blocking write
+
+			//check if whole data been written
+			if (gNonBlockingOpSize == gNonBlockingBuffer.size)
+			{
+				gCurrentCommand = IDLE;
+				gpFlashRequestDoneCB();
+			}
+			//continue to the next transaction
+			else
+			{
+				performNonBlockingWrite();
+			}
 			break;
 		case BLOCK_ERASE:
 		case BULK_ERASE:
@@ -95,6 +196,8 @@ _Interrupt1 void flashISR()
 			DBG_ASSERT(false);
 		
 	}
+
+
 }
 
 result_t flash_init( void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32_t size),
@@ -155,12 +258,17 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)
 		return INVALID_ARGUMENTS;
 	}
 	
+	_disable();
 	if (!flash_is_ready())
 	{
+		_enable();
 		return NOT_READY;
 	}
 	
 	gCurrentCommand = READ_DATA;
+	_enable();
+
+
 	
 }
 
@@ -220,11 +328,16 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 		return  INVALID_ARGUMENTS;
 	}
 	
+	_disable();
 	if (!flash_is_ready())
 	{
+		_enable();
 		return NOT_READY;
 	}
 	
+	gCurrentCommand = READ_DATA;
+	_enable();
+
 	cr.bits.CMD = READ_DATA;
 
 	//no need to set current command, since this is single thread program and this is blocking function
@@ -286,12 +399,15 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 		return  INVALID_ARGUMENTS;
 	}
 	
+	_disable();
 	if (!flash_is_ready())
 	{
+		_enable();
 		return NOT_READY;
 	}
 	
 	gCurrentCommand = PAGE_PROGRAM;
+	_enable();
 }
 
 /*
@@ -354,8 +470,6 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 
 	while(writtenBytes < size)
 	{
-		wait_for_flash_to_be_idle;
-
 		//calculate the size of the current transaction
 		transactionBytes = MIN(size-writtenBytes,DATA_REG_BYTES);
 
@@ -376,6 +490,8 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 		_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
 		writtenBytes+=transactionBytes;
+
+		wait_for_flash_to_be_idle;
 
 	}
 
