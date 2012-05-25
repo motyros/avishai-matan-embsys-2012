@@ -31,8 +31,8 @@ typedef union
 	uint32_t data;
 	struct
 	{
-		uint32_t SCIP				:1;
-		const uint32_t cycleDone	:1;
+		const uint32_t SCIP		:1;
+        uint32_t cycleDone	:1;
 		const uint32_t reserved		:30;
 	}bits;
 }FlashStatusRegister;
@@ -96,12 +96,7 @@ void startNonBlockingRead()
 	_sr(gNonBlockingStartAddress+gNonBlockingBuffer.size,FLASH_ADDRESS_REG_ADDR);
 	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
-	gNonBlockingStartAddress+=gNonBlockingBuffer.size;
-
-	...
-	...
-	...
-
+	
 }
 
 void performNonBlockingWrite()
@@ -152,7 +147,9 @@ bool finishNonBlockingRead()
 _Interrupt1 void flashISR()
 {
 	//acknowledge the interrupt
-	_sr(0x0,FLASH_STATUS_REG_ADDR);
+    FlashStatusRegister sr = {0};
+    sr.bits.cycleDone = 1;
+    _sr(sr.data,FLASH_STATUS_REG_ADDR);
 	
 	//handle the interrupt
 	switch (gCurrentCommand)
@@ -212,9 +209,6 @@ result_t flash_init( void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32
 		gpFlashDataReciveCB = flash_data_recieve_cb;
 		gpFlashRequestDoneCB = flash_request_done_cb;
 		
-		gReadBuffer.size = 0;
-		gWriteBuffer.size = 0;
-		
 		return OPERATION_SUCCESS;
 	}
 }			 
@@ -249,8 +243,6 @@ bool flash_is_ready(void)
 result_t flash_read_start(uint16_t start_address, uint16_t size)
 {
 
-	FlashControlRegister cr;
-	
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
 	
 	if (size > MAX_REQUEST_BUFFER_SIZE)
@@ -267,8 +259,14 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)
 	
 	gCurrentCommand = READ_DATA;
 	_enable();
+        
+        gNonBlockingBuffer.size = 0;
+        gNonBlockingOpSize = size;
+        gNonBlockingStartAddress = start_address;
 
+        startNonBlockingRead();
 
+        return OPERATION_SUCCESS;
 	
 }
 
@@ -281,7 +279,7 @@ void loadDataFromRegs(uint8_t buffer[],const uint16_t size)
 
 	while(i < size)
 	{
-		DBG_ASSERT(regIndex < NUM_OF_DATA_REG);
+ 		DBG_ASSERT(regIndex < NUM_OF_DATA_REG);
 
 		regData = _lr(FLASH_FDATA_BASE_ADDR+regIndex);
 
@@ -314,7 +312,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 {
 	uint16_t readBytes = 0;
 	uint16_t transactionBytes;
-	FlashControlRegister cr;
+	FlashControlRegister cr = {0};
 
 	DBG_ASSERT(start_address + size*8 >= FLASH_CAPACITY);
 	
@@ -387,6 +385,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
  ***********************************************************************/
 result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t buffer[])
 {
+    uint16_t i;
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
 	
 	if (!buffer)
@@ -408,6 +407,18 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 	
 	gCurrentCommand = PAGE_PROGRAM;
 	_enable();
+
+        for(i = 0 ; i < size ; ++i)
+        {
+            gNonBlockingBuffer.data[i] = buffer[i];
+        }
+        gNonBlockingBuffer.size = size;
+        gNonBlockingOpSize = 0;
+        gNonBlockingStartAddress = start_address;
+
+        performNonBlockingWrite();
+
+        return OPERATION_SUCCESS;
 }
 
 /*
@@ -443,7 +454,7 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 
 	uint16_t writtenBytes = 0;
 	uint16_t transactionBytes;
-	FlashControlRegister cr;
+	FlashControlRegister cr = {0};
 
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
 	

@@ -15,14 +15,21 @@ network.o: network/network.c network/network.h
 timer.o: timer/timer.c timer/timer.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o:	main.c timer.o LCD.o input_panel.o
+main.o:	main.c timer.o LCD.o flash.o input_panel.o
 	mcc -c -a6 -g -w3 $< -o $@   
 
-a.out: main.o timer.o LCD.o input_panel.o ivt.s device.svr3
+a.out: main.o timer.o LCD.o input_panel.o flash.o ivt.s device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map -Hldopt=-uInterruptTable
 
-7segments_test:
-	mcc -a6 -g -w3 7segments_test.c 7segments.c device.svr3 -o a.out 
+dump:
+	rm -f hex.txt
+	hexdump embsys_flash.img > hex.txt
+	gedit hex.txt &
+
+dump1: 
+	rm -f hex.txt
+	hexdump embsys_flash.img > hex.txt
+	emacs hex.txt  	
 tar:
 	tar cvf avishl02_matanp01 ... device.svr3 makefile README
 

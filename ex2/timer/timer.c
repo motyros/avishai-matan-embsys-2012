@@ -62,7 +62,7 @@ _Interrupt1 void timer0ISR()
 	handleTimerExpiration(0);
 }
 
-_Interrupt1 void timer1ISR()
+_Interrupt2 void timer1ISR()
 {
 	handleTimerExpiration(1);
 }
