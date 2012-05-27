@@ -55,12 +55,16 @@ typedef union
 
 typedef enum
 {
-	IDLE			=	0x00,
-	READ_DATA 		= 	0x03,
-	PAGE_PROGRAM 	= 	0x05,
-	BLOCK_ERASE 	= 	0xD8,
-	BULK_ERASE 		= 	0xC7,
-}SPICommand;
+	IDLE						= 0x00,
+	BLOCKING_READ_DATA			= 0x01,
+	NONE_BLOCKING_READ_DATA		= 0x02,
+	READ_DATA					= 0x03,
+	PAGE_PROGRAM 				= 0x05,
+	BLOCKING_PAGE_PROGRAM		= 0x06,
+	NONE_BLOCKING_PAGE_PROGRAM	= 0x07,
+	BLOCK_ERASE					= 0xD8,
+	BULK_ERASE					= 0xC7,
+}SPILogicCommand;
 
 
 void (*gpFlashDataReciveCB)(uint8_t const *,uint32_t);
@@ -68,7 +72,7 @@ void (*gpFlashRequestDoneCB)(void);
 
 
 
-SPICommand gCurrentCommand;
+SPILogicCommand gCurrentCommand;
 
 FlashBuffer gNonBlockingBuffer;
 uint16_t gNonBlockingOpSize;
@@ -146,18 +150,21 @@ bool finishNonBlockingRead()
 
 _Interrupt1 void flashISR()
 {
-    FlashControlRegister cr = {_lr(FLASH_CONTROL_REG_ADDR)};
 	//acknowledge the interrupt
     FlashStatusRegister sr = {0};
-    SPICommand cmd = (SPICommand)cr.bits.CMD;
-
     sr.bits.cycleDone = 1;
     _sr(sr.data,FLASH_STATUS_REG_ADDR);
 	
+    //no need to handle those commands since they block
+    if (gCurrentCommand == BLOCKING_READ_DATA || gCurrentCommand == BLOCKING_PAGE_PROGRAM)
+    {
+    	return;
+    }
+
 	//handle the interrupt
 	switch (gCurrentCommand)
 	{
-		case READ_DATA: //non-blocking read
+		case NONE_BLOCKING_READ_DATA: //non-blocking read
 
 			//load data from regs to buffer and check if whole read is done
 			if (finishNonBlockingRead())
@@ -173,7 +180,7 @@ _Interrupt1 void flashISR()
 			}
 			break;
 
-		case PAGE_PROGRAM: //non-blocking write
+		case NONE_BLOCKING_PAGE_PROGRAM: //non-blocking write
 
 			//check if whole data been written
 			if (gNonBlockingOpSize == gNonBlockingBuffer.size)
@@ -260,7 +267,7 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)
 		return NOT_READY;
 	}
 	
-	gCurrentCommand = READ_DATA;
+	gCurrentCommand = NONE_BLOCKING_READ_DATA;
 	_enable();
         
         gNonBlockingBuffer.size = 0;
@@ -336,7 +343,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 		return NOT_READY;
 	}
 	
-	gCurrentCommand = READ_DATA;
+	gCurrentCommand = BLOCKING_READ_DATA;
 	_enable();
 
 	cr.bits.CMD = READ_DATA;
@@ -350,7 +357,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 
 		//no need for interrupts since this is blocking function
 		cr.bits.SME = 0;
-
+		_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 		cr.bits.SCGO = 1;
 
 		_sr(start_address+readBytes,FLASH_ADDRESS_REG_ADDR);
@@ -408,7 +415,7 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 		return NOT_READY;
 	}
 	
-	gCurrentCommand = PAGE_PROGRAM;
+	gCurrentCommand = NONE_BLOCKING_PAGE_PROGRAM;
 	_enable();
 
         for(i = 0 ; i < size ; ++i)
@@ -477,7 +484,7 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 		_enable();
 		return NOT_READY;
 	}
-	gCurrentCommand = PAGE_PROGRAM;
+	gCurrentCommand = BLOCKING_PAGE_PROGRAM;
 	_enable();
 	
 	cr.bits.CMD = PAGE_PROGRAM;
