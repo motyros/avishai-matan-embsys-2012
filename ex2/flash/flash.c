@@ -5,11 +5,12 @@
 #define FLASH_CAPACITY (64*1024)
 #define FLASH_BLOCK_SIZE (4*1024)
 
+//flash HW definitions
 #define NUM_OF_DATA_REG 16
 #define FLASH_BASE_ADDR 0x150
 #define DATA_REG_BYTES NUM_OF_DATA_REG*sizeof(uint32_t)
 
-
+//flash REG addresses
 #define FLASH_STATUS_REG_ADDR (FLASH_BASE_ADDR+0x0)
 #define FLASH_CONTROL_REG_ADDR (FLASH_BASE_ADDR+0x1)
 #define FLASH_ADDRESS_REG_ADDR (FLASH_BASE_ADDR+0x2)
@@ -19,6 +20,7 @@
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
 
+//buffer to store non-blocking data
 typedef struct
 {
 	uint32_t size;
@@ -26,17 +28,17 @@ typedef struct
 }FlashBuffer;
 
 #pragma pack(1)
+
 typedef union
 {
 	uint32_t data;
 	struct
 	{
-		const uint32_t SCIP		:1;
-        uint32_t cycleDone	:1;
+		const uint32_t SCIP			:1;
+		uint32_t cycleDone			:1;
 		const uint32_t reserved		:30;
 	}bits;
 }FlashStatusRegister;
-
 
 typedef union
 {
@@ -51,6 +53,7 @@ typedef union
 		const uint32_t reserved2	:10;
 	}bits;
 }FlashControlRegister;
+
 #pragma pack
 
 typedef enum
@@ -66,7 +69,7 @@ typedef enum
 	BULK_ERASE					= 0xC7,
 }SPILogicCommand;
 
-
+//callbacks pointers
 void (*gpFlashDataReciveCB)(uint8_t const *,uint32_t);
 void (*gpFlashRequestDoneCB)(void);
 
@@ -74,42 +77,58 @@ void (*gpFlashRequestDoneCB)(void);
 
 SPILogicCommand gCurrentCommand;
 
-FlashBuffer gNonBlockingBuffer;
-uint16_t gNonBlockingOpSize;
-uint16_t gNonBlockingStartAddress;
+//globals to handle none blocking read and program
+FlashBuffer gNoneBlockingBuffer;
+uint16_t gNoneBlockingOpSize;
+uint16_t gNoneBlockingStartAddress;
 
 //FWD declaration
 void loadDataFromRegs(uint8_t buffer[],const uint16_t size);
 void loadDataToRegs(const uint8_t buffer[],const uint16_t size);
 
 
-void startNonBlockingRead()
+//this function starts none blocking read operation. this function can read up to DATA_REG_BYTES bytes
+void startNoneBlockingRead()
 {
 
-	uint16_t transactionBytes = MIN(gNonBlockingOpSize-gNonBlockingBuffer.size,DATA_REG_BYTES);
+	uint16_t transactionBytes = MIN(gNoneBlockingOpSize-gNoneBlockingBuffer.size,DATA_REG_BYTES);
 	FlashControlRegister cr;
 
 	cr.bits.CMD = READ_DATA;
 
 	cr.bits.FDBC = transactionBytes-1;
 
+	//enable interrupts
 	cr.bits.SME = 1;
 
 	cr.bits.SCGO = 1;
 
-	_sr(gNonBlockingStartAddress+gNonBlockingBuffer.size,FLASH_ADDRESS_REG_ADDR);
+	_sr(gNoneBlockingStartAddress+gNoneBlockingBuffer.size,FLASH_ADDRESS_REG_ADDR);
 	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
-	
+
 }
 
-void performNonBlockingWrite()
+//finish none blocking read, update all relevant counters
+bool finishNoneBlockingRead()
+{
+	uint16_t transactionBytes = MIN(gNoneBlockingOpSize-gNoneBlockingBuffer.size,DATA_REG_BYTES);
+
+	loadDataFromRegs(gNoneBlockingBuffer.data + gNoneBlockingBuffer.size,transactionBytes);
+
+	gNoneBlockingBuffer.size+=transactionBytes;
+
+	return gNoneBlockingBuffer.size==gNoneBlockingOpSize;
+}
+
+//perform up to DATA_REG_BYTES bytes none blocking write
+void performNoneBlockingWrite()
 {
 	uint16_t transactionBytes;
 	FlashControlRegister cr;
 
 	//calculate transaction size in bytes
-	transactionBytes = MIN(gNonBlockingBuffer.size-gNonBlockingOpSize,DATA_REG_BYTES);
+	transactionBytes = MIN(gNoneBlockingBuffer.size-gNoneBlockingOpSize,DATA_REG_BYTES);
 
 	//set command type
 	cr.bits.CMD = PAGE_PROGRAM;
@@ -124,91 +143,81 @@ void performNonBlockingWrite()
 	cr.bits.SCGO = 1;
 
 	//read data from the given buffer to data registers
-	loadDataToRegs(gNonBlockingBuffer.data+gNonBlockingOpSize,transactionBytes);
+	loadDataToRegs(gNoneBlockingBuffer.data+gNoneBlockingOpSize,transactionBytes);
 
 	//set flash write address
-	_sr(gNonBlockingStartAddress+gNonBlockingOpSize,FLASH_ADDRESS_REG_ADDR);
+	_sr(gNoneBlockingStartAddress+gNoneBlockingOpSize,FLASH_ADDRESS_REG_ADDR);
 
 	//advance number of written bytes
-	gNonBlockingOpSize+=transactionBytes;
+	gNoneBlockingOpSize+=transactionBytes;
 
 	//perform writing
 	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 }
 
 
-bool finishNonBlockingRead()
-{
-	uint16_t transactionBytes = MIN(gNonBlockingOpSize-gNonBlockingBuffer.size,DATA_REG_BYTES);
-
-	loadDataFromRegs(gNonBlockingBuffer.data + gNonBlockingBuffer.size,transactionBytes);
-
-	gNonBlockingBuffer.size+=transactionBytes;
-
-	return gNonBlockingBuffer.size==gNonBlockingOpSize;
-}
-
+//this is the interrupt service routine
 _Interrupt1 void flashISR()
 {
 	//acknowledge the interrupt
-    FlashStatusRegister sr = {0};
-    sr.bits.cycleDone = 1;
-    _sr(sr.data,FLASH_STATUS_REG_ADDR);
-	
-    //no need to handle those commands since they block
-    if (gCurrentCommand == BLOCKING_READ_DATA || gCurrentCommand == BLOCKING_PAGE_PROGRAM)
-    {
-    	return;
-    }
+	FlashStatusRegister sr = {0};
+	sr.bits.cycleDone = 1;
+	_sr(sr.data,FLASH_STATUS_REG_ADDR);
+
+	//no need to handle those commands since they block
+	if (gCurrentCommand == BLOCKING_READ_DATA || gCurrentCommand == BLOCKING_PAGE_PROGRAM)
+	{
+		return;
+	}
 
 	//handle the interrupt
 	switch (gCurrentCommand)
 	{
-		case NONE_BLOCKING_READ_DATA: //non-blocking read
+	case NONE_BLOCKING_READ_DATA: //non-blocking read
 
-			//load data from regs to buffer and check if whole read is done
-			if (finishNonBlockingRead())
-			{
-				gCurrentCommand = IDLE;
-				gpFlashDataReciveCB(gNonBlockingBuffer.data,gNonBlockingBuffer.size);
+		//load data from regs to buffer and check if whole read is done
+		if (finishNoneBlockingRead())
+		{
+			gCurrentCommand = IDLE;
+			gpFlashDataReciveCB(gNoneBlockingBuffer.data,gNoneBlockingBuffer.size);
 
-			}
-			//continue to the next transaction
-			else
-			{
-				startNonBlockingRead();
-			}
-			break;
+		}
+		//continue to the next transaction
+		else
+		{
+			startNoneBlockingRead();
+		}
+		break;
 
-		case NONE_BLOCKING_PAGE_PROGRAM: //non-blocking write
+	case NONE_BLOCKING_PAGE_PROGRAM: //non-blocking write
 
-			//check if whole data been written
-			if (gNonBlockingOpSize == gNonBlockingBuffer.size)
-			{
-				gCurrentCommand = IDLE;
-				gpFlashRequestDoneCB();
-			}
-			//continue to the next transaction
-			else
-			{
-				performNonBlockingWrite();
-			}
-			break;
-		case BLOCK_ERASE:
-		case BULK_ERASE:
+		//check if whole data been written
+		if (gNoneBlockingOpSize == gNoneBlockingBuffer.size)
+		{
 			gCurrentCommand = IDLE;
 			gpFlashRequestDoneCB();
-			break;
-		default:
-			DBG_ASSERT(false);
-		
+		}
+		//continue to the next transaction
+		else
+		{
+			performNoneBlockingWrite();
+		}
+		break;
+	case BLOCK_ERASE:
+	case BULK_ERASE:
+		gCurrentCommand = IDLE;
+		gpFlashRequestDoneCB();
+		break;
+	default:
+		DBG_ASSERT(false);
+
 	}
 
 
 }
 
 result_t flash_init( void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32_t size),
-		     void (*flash_request_done_cb)(void))
+		void (*flash_request_done_cb)(void))
 {
 	if (!flash_data_recieve_cb || !flash_request_done_cb)
 	{
@@ -218,11 +227,12 @@ result_t flash_init( void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32
 	{
 		gpFlashDataReciveCB = flash_data_recieve_cb;
 		gpFlashRequestDoneCB = flash_request_done_cb;
-		
+
 		return OPERATION_SUCCESS;
 	}
 }			 
 
+//return true if hardware is idle
 bool flashIsIdle(void)
 {
 	FlashStatusRegister cr = {_lr(FLASH_STATUS_REG_ADDR)};
@@ -230,56 +240,44 @@ bool flashIsIdle(void)
 	return cr.bits.SCIP==0;
 }
 
+//return true of the whole flash is ready for the next command
 bool flash_is_ready(void)
 {
-
+	//hardware idle and we are not in a middle of big operation
 	return (gCurrentCommand==IDLE && flashIsIdle());
 }
 
-/**********************************************************************
- *
- * Function:    flash_read_start
- *
- * Descriptor:  Read "size" bytes start from address "start_address".
- *              This function is non-blocking.
- *
- * Notes:       size = # bytes to read - must be > 0
- *
- * Return:      OPERATION_SUCCESS: Read request done successfully.
- *              INVALID_ARGUMENTS: One of the arguments is invalid.
- *              NOT_READY:         The device is not ready for a new request.
- *
- ***********************************************************************/
 result_t flash_read_start(uint16_t start_address, uint16_t size)
 {
 
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
-	
+
 	if (size > MAX_REQUEST_BUFFER_SIZE)
 	{
 		return INVALID_ARGUMENTS;
 	}
-	
+
 	_disable();
 	if (!flash_is_ready())
 	{
 		_enable();
 		return NOT_READY;
 	}
-	
+
 	gCurrentCommand = NONE_BLOCKING_READ_DATA;
 	_enable();
-        
-        gNonBlockingBuffer.size = 0;
-        gNonBlockingOpSize = size;
-        gNonBlockingStartAddress = start_address;
 
-        startNonBlockingRead();
+	gNoneBlockingBuffer.size = 0;
+	gNoneBlockingOpSize = size;
+	gNoneBlockingStartAddress = start_address;
 
-        return OPERATION_SUCCESS;
-	
+	startNoneBlockingRead();
+
+	return OPERATION_SUCCESS;
+
 }
 
+//load size bytes from FDATA regs to given buffer
 void loadDataFromRegs(uint8_t buffer[],const uint16_t size)
 {
 
@@ -289,7 +287,7 @@ void loadDataFromRegs(uint8_t buffer[],const uint16_t size)
 
 	while(i < size)
 	{
- 		DBG_ASSERT(regIndex < NUM_OF_DATA_REG);
+		DBG_ASSERT(regIndex < NUM_OF_DATA_REG);
 
 		regData = _lr(FLASH_FDATA_BASE_ADDR+regIndex);
 
@@ -302,22 +300,6 @@ void loadDataFromRegs(uint8_t buffer[],const uint16_t size)
 	}
 }
 
-/**********************************************************************
- *
- * Function:    flash_read
- *
- * Descriptor:  Same as flash_read_start except the data received in the supplied
- *              buffer.
- *              This function is blocking.
-
- * Notes:       size = # bytes to read - must be > 0
- *
- * Return:      OPERATION_SUCCESS: Read request done successfully.
- *              INVALID_ARGUMENTS: One of the arguments is invalid.
- *              NOT_READY:         The device is not ready for a new request.
- *              NULL_POINTER:      One of the arguments points to NULL
- *
- ***********************************************************************/
 result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 {
 	uint16_t readBytes = 0;
@@ -325,24 +307,24 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 	FlashControlRegister cr = {0};
 
 	DBG_ASSERT(start_address + size*8 >= FLASH_CAPACITY);
-	
+
 	if (!buffer)
 	{
 		return NULL_POINTER;
 	}
-	
+
 	if (size > MAX_REQUEST_BUFFER_SIZE )
 	{
 		return  INVALID_ARGUMENTS;
 	}
-	
+
 	_disable();
 	if (!flash_is_ready())
 	{
 		_enable();
 		return NOT_READY;
 	}
-	
+
 	gCurrentCommand = BLOCKING_READ_DATA;
 	_enable();
 
@@ -357,7 +339,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 
 		//no need for interrupts since this is blocking function
 		cr.bits.SME = 0;
-		_sr(cr.data,FLASH_CONTROL_REG_ADDR);
+
 		cr.bits.SCGO = 1;
 
 		_sr(start_address+readBytes,FLASH_ADDRESS_REG_ADDR);
@@ -371,68 +353,56 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 
 	}
 
+	gCurrentCommand = IDLE;
+
 	return OPERATION_SUCCESS;
-	
-	
-	
+
+
+
 }
 
-/**********************************************************************
- *
- * Function:    flash_write_start
- *
- * Descriptor:  Write "size" bytes start from address "start_address".
- *              This function is non-blocking.
- *
- * Notes:       size = # bytes to write - must be > 0.
- *              The given buffer can be used immediately when the function returned.
- *
- * Return:      OPERATION_SUCCESS: Write request done successfully.
- *              INVALID_ARGUMENTS: One of the arguments is invalid.
- *              NOT_READY:         The device is not ready for a new request.
- *              NULL_POINTER:      One of the arguments points to NULL
- *
- ***********************************************************************/
 result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t buffer[])
 {
-    uint16_t i;
+	uint16_t i;
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
-	
+
 	if (!buffer)
 	{
 		return NULL_POINTER;
 	}
-	
+
 	if (size > MAX_REQUEST_BUFFER_SIZE)
 	{
 		return  INVALID_ARGUMENTS;
 	}
-	
+
 	_disable();
 	if (!flash_is_ready())
 	{
 		_enable();
 		return NOT_READY;
 	}
-	
+
 	gCurrentCommand = NONE_BLOCKING_PAGE_PROGRAM;
 	_enable();
 
-        for(i = 0 ; i < size ; ++i)
-        {
-            gNonBlockingBuffer.data[i] = buffer[i];
-        }
-        gNonBlockingBuffer.size = size;
-        gNonBlockingOpSize = 0;
-        gNonBlockingStartAddress = start_address;
+	//copy data to internal buffer
+	for(i = 0 ; i < size ; ++i)
+	{
+		gNoneBlockingBuffer.data[i] = buffer[i];
+	}
 
-        performNonBlockingWrite();
+	gNoneBlockingBuffer.size = size;
+	gNoneBlockingOpSize = 0;
+	gNoneBlockingStartAddress = start_address;
 
-        return OPERATION_SUCCESS;
+	performNoneBlockingWrite();
+
+	return OPERATION_SUCCESS;
 }
 
 /*
- *  load data from
+ *  load size bytes from given buffer to FDATA regs
  */
 void loadDataToRegs(const uint8_t buffer[],const uint16_t size)
 {
@@ -443,22 +413,7 @@ void loadDataToRegs(const uint8_t buffer[],const uint16_t size)
 		_sr((*(uint32_t*)(buffer+i)),FLASH_FDATA_BASE_ADDR+regIndex);
 	}
 }
-/**********************************************************************
- *
- * Function:    flash_write
- *
- * Descriptor:  Same as flash_write_start.
- *              This function is blocking.
- *
- * Notes:       size = # bytes to write - must be > 0.
- *              The given buffer can be used immediately when the function returned.
- *
- * Return:      OPERATION_SUCCESS: Write request done successfully.
- *              INVALID_ARGUMENTS: One of the arguments is invalid.
- *              NOT_READY:         The device is not ready for a new request.
- *              NULL_POINTER:      One of the arguments points to NULL
- *
- ***********************************************************************/
+
 result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer[])
 {
 
@@ -467,17 +422,17 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 	FlashControlRegister cr = {0};
 
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
-	
+
 	if (!buffer)
 	{
 		return NULL_POINTER;
 	}
-	
+
 	if (size > MAX_REQUEST_BUFFER_SIZE)
 	{
 		return  INVALID_ARGUMENTS;
 	}
-	
+
 	_disable();
 	if (!flash_is_ready())
 	{
@@ -486,7 +441,7 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 	}
 	gCurrentCommand = BLOCKING_PAGE_PROGRAM;
 	_enable();
-	
+
 	cr.bits.CMD = PAGE_PROGRAM;
 
 	while(writtenBytes < size)
@@ -522,73 +477,46 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 }
 
 
-/**********************************************************************
- *
- * Function:    flash_bulk_erase_start
- *
- * Descriptor:  Erase all the content that find on the flash device.
- *              This function is non-blocking.
- *
- * Notes:
- *
- * Return:      OPERATION_SUCCESS: The request done successfully.
- *              NOT_READY:         The device is not ready for a new request.
- *
- ***********************************************************************/
 result_t flash_bulk_erase_start(void)
 {
 	FlashControlRegister cr = {0};
-	
+
 	_disable();
 	if (!flash_is_ready())
 	{
 		_enable();
 		return NOT_READY;
 	}
-	
+
 	gCurrentCommand = BULK_ERASE;
 	_enable();
-	
+
 	//prepare control reg
 	cr.bits.CMD = BULK_ERASE;
 	cr.bits.SME = 1;
 	cr.bits.SCGO = 1;
-	
+
 	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
-	
+
 	return OPERATION_SUCCESS;
 
 }
 
 
-/**********************************************************************
- *
- * Function:    flash_block_erase_start
- *
- * Descriptor:  Erase the content that find on the block that find on address
- *              "start_address".
- *              This function is non-blocking.
- *
- * Notes:
- *
- * Return:      OPERATION_SUCCESS: The request done successfully.
- *              NOT_READY:         The device is not ready for a new request.
- *
- ***********************************************************************/
 result_t flash_block_erase_start(uint16_t start_address)
 {
-	
+
 	DBG_ASSERT(start_address < FLASH_CAPACITY);
-	
+
 	FlashControlRegister cr = {0};
-	
+
 	_disable();
 	if (!flash_is_ready())
 	{
 		_enable();
 		return NOT_READY;
 	}
-	
+
 	//the ISR should clean this var
 	gCurrentCommand = BLOCK_ERASE;
 	_enable();
@@ -600,9 +528,9 @@ result_t flash_block_erase_start(uint16_t start_address)
 
 	//set the address
 	_sr(start_address,FLASH_ADDRESS_REG_ADDR);
-		
+
 	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
-	
+
 	return OPERATION_SUCCESS;
 }
 

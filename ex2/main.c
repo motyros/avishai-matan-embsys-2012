@@ -55,15 +55,53 @@ result_t testFlash()
 	buf[BUF_SIZE-1] = 'z';
 
 	flash_init(flashReadDone,flashOpComplete);
-        gFlashOpDone = false;
+    gFlashOpDone = false;
+    flash_bulk_erase_start();
+    while(!gFlashOpDone);
+    gFlashOpDone = false;
 	res = flash_write_start(9,BUF_SIZE,(uint8_t*)&buf);
-	while(!gFlashOpDone);
-        gFlashOpDone = false;
-	res = flash_read(9,BUF_SIZE,(uint8_t*)&buf2);
-        while(!gFlashOpDone);
+
+
 	res = flash_read(9,BUF_SIZE,(uint8_t*)&buf2);
 
+	res = flash_read(9,BUF_SIZE,(uint8_t*)&buf2);
+
+	res = flash_write(1000,BUF_SIZE,(uint8_t*)&buf2);
+	gFlashOpDone = false;
+	res = flash_read_start(1000,BUF_SIZE);
+	while(!gFlashOpDone);
+
+
 	return res;
+}
+int gTimer0Counter = 0;
+int gTimer1Counter = 0;
+
+void timer0cb()
+{
+	gTimer0Counter++;
+}
+
+void timer1cb()
+{
+	gTimer1Counter++;
+}
+
+void timerTest()
+{
+	timer0_register(1000,true,timer0cb);
+	timer1_register(500,false,timer1cb);
+	int i = 0;
+
+	//make sure gTimer0Counter = 1 and gTimer1Counter keep increasing
+	while (i < 1000)
+	{
+		i++;
+		if (i>100)
+		{
+			i = 0;
+		}
+	}
 }
 
 void main()
