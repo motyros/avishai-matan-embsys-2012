@@ -17,7 +17,7 @@ bool gFlashOpDone = false;
 button gButton;
 void flushComplete()
 {
-    gFlashOpDone = true;
+    //gFlashOpDone = true;
 }
 
 void buttonPressed(button b)

@@ -146,8 +146,11 @@ bool finishNonBlockingRead()
 
 _Interrupt1 void flashISR()
 {
+    FlashControlRegister cr = {_lr(FLASH_CONTROL_REG_ADDR)};
 	//acknowledge the interrupt
     FlashStatusRegister sr = {0};
+    SPICommand cmd = (SPICommand)cr.bits.CMD;
+
     sr.bits.cycleDone = 1;
     _sr(sr.data,FLASH_STATUS_REG_ADDR);
 	
