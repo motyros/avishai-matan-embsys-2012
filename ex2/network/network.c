@@ -43,11 +43,11 @@ typedef struct
 		uint32_t data;
 		struct
         {
-			uint8_t NTIP				:1;
-			uint8_t reserved			:1;
-			uint8_t NRIP				:1;
-			uint8_t NROR				:1;
-			uint8_t reserved			:4;
+			uint8_t NTIP		:1;
+			uint8_t reserved	:1;
+			uint8_t NRIP		:1;
+			uint8_t NROR		:1;
+			uint8_t reserved	:4;
 			union
 			{
 				uint8_t data;
@@ -67,6 +67,7 @@ typedef struct
 } volatile NetworkRegs;
 #pragma pack()
 
+NetworkRegs *gpNetwork = (NetworkRegs*)(NETWORK_BASE_ADDR);
 
 uint32_t gNetworkData[NETWORK_MAXIMUM_TRANSMISSION_UNIT];
 network_operating_mode_t gNetworkOperMode;
@@ -82,6 +83,10 @@ result_t network_init(const network_init_params_t *init_params)
 //      return INVALID_ARGUMENTS;
 
         gNetworkParams = *init_params;
+		gpNetwork->NTXBP = init_params->transmit_buffer;
+		gpNetwork->NTXBL = init_params->size_t_buffer;
+		gpNetwork->NRXBP = init_params->recieve_buffer;
+		gpNetwork->NRXBL = init_params->size_r_buffer;
         return OPERATION_SUCCESS;
 }
 
@@ -91,6 +96,9 @@ result_t network_set_operating_mode(network_operating_mode_t new_mode)
         //      return INVALID_ARGUMENTS;
 
         gNetworkOperMode = new_mode;
+		gpNetwork->NCTRL.NOM.data = new_mode.NETWORK_OPERATING_MODE_NORMAL |
+								new_mode.NETWORK_OPERATING_MODE_SMSC | 
+								new_mode.NETWORK_OPERATING_MODE_INTERNAL_LOOPBACK;
         return OPERATION_SUCCESS;
 }
 
