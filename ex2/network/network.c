@@ -140,7 +140,9 @@ typedef struct
 			}
 
 
-			if( ((uint32_t)(gpNetwork->NTXFH + 1))%gpNetwork->NTXBL == (uint32_t)gpNetwork->NTXFT)
+			desc_t* headOffset = (desc_t*)((uint32_t)gpNetwork->NTXFH - (uint32_t)gpNetwork->NTXBP);
+			desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NTXFT - (uint32_t)gpNetwork->NTXBP);
+			if( ((uint32_t)(headOffset + 1))%gpNetwork->NTXBL == (uint32_t)tailOffset)
 			{
 				return NETWORK_TRANSMIT_BUFFER_FULL;
 			}
@@ -164,14 +166,23 @@ typedef struct
 				//Acknowledging the interrupt
 				gpNetwork->NSTAT.NIRE.bits.RxComplete = 0;
 
-				gNetworkCallBacks.recieved_cb();
+				desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NRXFT - (uint32_t)gpNetwork->NRXBP);
+				//uint32_t lastDesc1 = (uint32_t)(tailOffset + gpNetwork->NRXBL - 1)%gpNetwork->NRXBL;
+				desc_t* lastDesc = (desc_t*)( ((uint32_t)(tailOffset + gpNetwork->NRXBL - 1))%gpNetwork->NRXBL);
 
-			}else if(gpNetwork->NSTAT.NIRE.bits.TxComplete)
+				gNetworkCallBacks.recieved_cb((uint8_t*)lastDesc->pBuffer,lastDesc->buff_size,lastDesc->reserved);
+
+			}
+			else if(gpNetwork->NSTAT.NIRE.bits.TxComplete)
+
 			{
 				//Acknowledging the interrupt
 				gpNetwork->NSTAT.NIRE.bits.TxComplete = 0;
 
-				gNetworkCallBacks.transmitted_cb();
+				desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NTXFT - (uint32_t)gpNetwork->NTXBP);
+				desc_t* lastDesc = (desc_t*)((uint32_t)(tailOffset + gpNetwork->NTXBL - 1)%gpNetwork->NTXBL);
+
+				gNetworkCallBacks.transmitted_cb((uint8_t*)lastDesc->pBuffer,lastDesc->buff_size);
 
 				//?????????????????????//
 				//if Network Transmit is not in Progress, and the Transmit buffer is not empty
@@ -182,25 +193,30 @@ typedef struct
 				}
 				//?????????????????????//
 
-			}else if(gpNetwork->NSTAT.NIRE.bits.RxBufferTooSmall)
+			}
+			else if(gpNetwork->NSTAT.NIRE.bits.RxBufferTooSmall)
 			{
 				gpNetwork->NSTAT.NROR = 0;
-				gNetworkCallBacks.dropped_cb();
+				gNetworkCallBacks.dropped_cb(RX_BUFFER_TOO_SMALL);
 
-			}else if(gpNetwork->NSTAT.NIRE.bits.CircularBufferFulll)
+			}
+			else if(gpNetwork->NSTAT.NIRE.bits.CircularBufferFulll)
 			{
 				gpNetwork->NSTAT.NROR = 0;
-				gNetworkCallBacks.dropped_cb();
+				gNetworkCallBacks.dropped_cb(CIRCULAR_BUFFER_FULL);
 
-			}else if(gpNetwork->NSTAT.NIRE.bits.TxBadDescriptor)
+			}
+			else if(gpNetwork->NSTAT.NIRE.bits.TxBadDescriptor)
 			{
 				gNetworkCallBacks.transmit_error_cb();
 
-			}else if(gpNetwork->NSTAT.NIRE.bits.TxNetworkError)
+			}
+			else if(gpNetwork->NSTAT.NIRE.bits.TxNetworkError)
 			{
 				gNetworkCallBacks.transmit_error_cb();
 
-			}else
+			}
+			else
 			{
 				DBG_ASSERT(false);
 			}
