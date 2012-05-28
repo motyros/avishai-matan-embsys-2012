@@ -130,6 +130,24 @@ void timerTest()
 		}
 	}
 }
+#define NET_BUF_SIZE 32
+network_init_params_t networkInit;
+desc_t tranBuf[NET_BUF_SIZE];
+desc_t recBuf[NET_BUF_SIZE];
+void networkTest()
+{
+    networkInit.transmit_buffer = tranBuf;
+    networkInit.size_t_buffer = NET_BUF_SIZE;
+    networkInit.recieve_buffer = recBuf;
+    networkInit.size_r_buffer = NET_BUF_SIZE;
+    uint8_t buf[NET_BUF_SIZE];
+    buf[0]=0,buf[1]=1,buf[2]=2;
+    tranBuf[0].pBuffer = (uint32_t)buf;
+    network_init(&networkInit);
+    network_set_operating_mode(NETWORK_OPERATING_MODE_NORMAL);
+    network_send_packet_start((uint8_t*)tranBuf[0].pBuffer,NET_BUF_SIZE,3);
+    uint32_t s = sizeof(desc_t*);
+}
 
 void main()
 {
@@ -137,8 +155,6 @@ void main()
 
     //verified - working!
 	//timerTest();
-
-    //flashTest();
     
     lcd_init(flushComplete);
     //lcdTest();
