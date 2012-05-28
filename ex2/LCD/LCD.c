@@ -10,7 +10,7 @@
 #define INIT_CHAR ' '
 
 
-void (*gpFlushCompleteCB)(void);
+void (*gpFlushCompleteCB)(void) = NULL;
 
 //pack the struct with no internal spaces
 #pragma pack(1)

@@ -84,13 +84,18 @@ result_t registerTimer(	const uint32_t timerIndex,
 	gTimers[timerIndex].oneShot = oneShot;
 	
 	gTimers[timerIndex].control.data = 0;
+
+	//1. we want the timer to generate interrupts (IE=1)
 	gTimers[timerIndex].control.bits.IE = 1;
+	//2. we want to timer to be advanced even every clock cycle (NH=0)
+	gTimers[timerIndex].control.bits.NH = 0;
+	//3. we don't want the Watchdog to be set (W=0)
+	gTimers[timerIndex].control.bits.W = 0;
 	
 	_sr(0,gCountRegAddr[timerIndex]);
 	_sr(CYCLES_IN_MS * interval,gLimitRegAddr[timerIndex]);
-	//1. we want the timer to generate interrupts (IE=1)
-	//2. we want to timer to be advanced even every clock cycle (NH=0)
-	//3. we don't want the Watchdog to be set (W=0)
+
+
 	_sr(gTimers[timerIndex].control.data,gControlRegAddr[timerIndex]);
 
     return OPERATION_SUCCESS;

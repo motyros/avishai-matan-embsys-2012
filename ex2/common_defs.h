@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifndef NULL
+#define NULL 0x0
+#endif
 // Return values of external functions.
 typedef enum
 {

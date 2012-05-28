@@ -70,8 +70,8 @@ typedef enum
 }SPILogicCommand;
 
 //callbacks pointers
-void (*gpFlashDataReciveCB)(uint8_t const *,uint32_t);
-void (*gpFlashRequestDoneCB)(void);
+void (*gpFlashDataReciveCB)(uint8_t const *,uint32_t) = NULL;
+void (*gpFlashRequestDoneCB)(void) = NULL;
 
 
 
@@ -164,8 +164,11 @@ _Interrupt1 void flashISR()
 	sr.bits.cycleDone = 1;
 	_sr(sr.data,FLASH_STATUS_REG_ADDR);
 
+	FlashControlRegister cr = {0};
+	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
+
 	//no need to handle those commands since they block
-	if (gCurrentCommand == BLOCKING_READ_DATA || gCurrentCommand == BLOCKING_PAGE_PROGRAM)
+	if (gCurrentCommand == BLOCKING_READ_DATA || gCurrentCommand == BLOCKING_PAGE_PROGRAM || gCurrentCommand == IDLE)
 	{
 		return;
 	}
@@ -212,6 +215,8 @@ _Interrupt1 void flashISR()
 		DBG_ASSERT(false);
 
 	}
+
+	return;
 
 
 }

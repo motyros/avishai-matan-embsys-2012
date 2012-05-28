@@ -17,7 +17,7 @@ InterruptTable:
 	jal     BAD_INSTRUCTION_ISR     ; IRQ 11
 	jal     BAD_INSTRUCTION_ISR     ; IRQ 12
 	jal     BAD_INSTRUCTION_ISR     ; IRQ 13
-	jal     networkISR				; IRQ 14
+	jal     BAD_INSTRUCTION_ISR				; IRQ 14
 	jal     lcdDisplayISR  			; IRQ 15
 	  
 
