@@ -7,6 +7,15 @@ int gCounter = 0;
 uint32_t gA = 0;
 uint32_t gB = 0;
 uint32_t gC = 0;
+void lcdWrite(uint32_t row,bool sel,char* line,uint32_t len)
+{
+    result_t result = NOT_READY;
+    while (result == NOT_READY)
+    {
+        result  = lcd_set_row(row, sel, line, len);
+    }
+
+}
 void incCounter()
 {
     gCounter++; 
@@ -29,18 +38,21 @@ void buttonPressed(button b)
 
 void flashOpComplete(void)
 {
+	char line[] = {'S','o','m','e','*','t','h','i','n','g'};
+	lcdWrite(1,gFlashOpDone , line, 10);
     gFlashOpDone = true;
 
 }
 
 void flashReadDone(uint8_t const *buffer, uint32_t size)
 {
+	lcdWrite(1,gFlashOpDone , (char*)buffer, 12);
     gFlashOpDone = true;
 }
 
 #define BUF_SIZE 70
 
-result_t testFlash()
+result_t flashTest()
 {
 	uint8_t buf[BUF_SIZE];// = {'1','2','1','2','1','2','1','2','1','2'};
 	uint8_t buf2[BUF_SIZE];
@@ -58,22 +70,34 @@ result_t testFlash()
     gFlashOpDone = false;
     flash_bulk_erase_start();
     while(!gFlashOpDone);
+    while(!flash_is_ready());
     gFlashOpDone = false;
 	res = flash_write_start(9,BUF_SIZE,(uint8_t*)&buf);
 
 
 	res = flash_read(9,BUF_SIZE,(uint8_t*)&buf2);
-
+	if(res==OPERATION_SUCCESS) lcdWrite(2,gFlashOpDone,(char*) buf2,12);
 	res = flash_read(9,BUF_SIZE,(uint8_t*)&buf2);
-
-	res = flash_write(1000,BUF_SIZE,(uint8_t*)&buf2);
+	if(res==OPERATION_SUCCESS) lcdWrite(3,gFlashOpDone,(char*) buf2,12);
+	//res = flash_write(1000,BUF_SIZE,(uint8_t*)&buf2);
 	gFlashOpDone = false;
-	res = flash_read_start(1000,BUF_SIZE);
-	while(!gFlashOpDone);
-
+	//res = flash_read_start(1000,BUF_SIZE);
+//	while(!gFlashOpDone);
+    while(!flash_is_ready());
 
 	return res;
 }
+
+void lcdTest()
+{
+//    char line[] = {'S','o','m','e','_','t','h','i','n','g'};
+//    lcdWrite(4,line,10);
+    char line1[] = {'e','r','t','Q','!',' ','3','e','$','%','t',')'};
+    lcdWrite(5, false, line1, 12);
+    char line2[] = {'d','o',' ','i','t','!'};
+    lcdWrite(17, false, line2, 6);
+}
+
 int gTimer0Counter = 0;
 int gTimer1Counter = 0;
 
@@ -110,30 +134,12 @@ void main()
     //ip_init(buttonPressed);
     //ip_enable();
     _enable();
-    testFlash();
+    
+    //flashTest();
+    
     lcd_init(flushComplete);
-    
-    result_t result = NOT_READY;
-    char line[] = {'S','o','m','e','_','t','h','i','n','g'};
-    while (result == NOT_READY)
-    {
-        result  = lcd_set_row(4, true, line, 10);
-    }
-    
-    result = NOT_READY;
-    char line1[] = {'e','r','t','Q','!',' ','3','e','$','%','t',')'};
-    while (result == NOT_READY)
-    {
-        result  =   lcd_set_row(5, false, line1, 12);
-    }
-    
-    result = NOT_READY;
-    char line2[] = {'d','o',' ','i','t','!'};
-    while (result == NOT_READY)
-    {
-        result  = lcd_set_row(17, false, line2, 6);
-    }
-          
+    lcdTest();
+    flashTest();
     while(true)
     {
         //counter

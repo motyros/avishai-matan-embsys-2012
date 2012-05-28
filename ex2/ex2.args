@@ -6,7 +6,7 @@
 -toggle=deadbeef=1
 -Xtimer0
 -Xtimer1
--simextp=/cs/grad/avishl02/devl/embsys/ex2/embsys_pager.so
+-simextp=/cs/stud/matanp01/embsys/ex2/embsys_pager.so
 -simextp=/cs/course/current/embsys/www/embsys_flash.so
 -simextp=/cs/course/current/embsys/www/embsys_halt.so
 -mem=0
