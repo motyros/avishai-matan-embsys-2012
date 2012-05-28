@@ -8,13 +8,13 @@ typedef struct
 		{
 	desc_t* NTXBP;
 	uint32_t NTXBL;
-	desc_t* NTXFH;
-	desc_t* NTXFT;
+	uint32_t NTXFH;
+	uint32_t NTXFT;
 
 	desc_t* NRXBP;
 	uint32_t NRXBL;
-	desc_t* NRXFH;
-	desc_t* NRXFT;
+	uint32_t NRXFH;
+	uint32_t NRXFT;
 
 	struct
 	{
@@ -75,8 +75,8 @@ typedef struct
 
 		network_call_back_t gNetworkCallBacks;
 		uint32_t gNetworkData[NETWORK_MAXIMUM_TRANSMISSION_UNIT];
-		network_operating_mode_t gNetworkOperMode;
-		network_init_params_t gNetworkParams;
+//		network_operating_mode_t gNetworkOperMode;
+//		network_init_params_t gNetworkParams;
 
 		result_t network_init(const network_init_params_t *init_params)
 		{
@@ -90,17 +90,17 @@ typedef struct
 				return INVALID_ARGUMENTS;
 			}
 
-			gNetworkParams = *init_params;
+//			gNetworkParams = *init_params;
 			gNetworkCallBacks = init_params->list_call_backs;
 			gpNetwork->NTXBP = init_params->transmit_buffer;
 			gpNetwork->NTXBL = init_params->size_t_buffer;
-			gpNetwork->NTXFH = gpNetwork->NTXBP;
-			gpNetwork->NTXFT = gpNetwork->NTXBP;
+			gpNetwork->NTXFH = 0;
+			gpNetwork->NTXFT = 0;
 
 			gpNetwork->NRXBP = init_params->recieve_buffer;
 			gpNetwork->NRXBL = init_params->size_r_buffer;
-			gpNetwork->NRXFH = gpNetwork->NRXBP;
-			gpNetwork->NRXFT = gpNetwork->NRXBP;
+			gpNetwork->NRXFH = 0;
+			gpNetwork->NRXFT = 0;
 
 			gpNetwork->NCTRL.enableTxInterrupt = 1;
 			gpNetwork->NCTRL.enableRxInterrupt = 1;
@@ -116,7 +116,7 @@ typedef struct
 			//      if()
 			//      return INVALID_ARGUMENTS;
 
-			gNetworkOperMode = new_mode;
+//			gNetworkOperMode = new_mode;
 			gpNetwork->NCTRL.NOM.data = (new_mode);
 			return OPERATION_SUCCESS;
 		}
@@ -140,14 +140,14 @@ typedef struct
 			}
 
 
-			desc_t* headOffset = (desc_t*)((uint32_t)gpNetwork->NTXFH - (uint32_t)gpNetwork->NTXBP);
-			desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NTXFT - (uint32_t)gpNetwork->NTXBP);
-			if( ((uint32_t)(headOffset + 1))%gpNetwork->NTXBL == (uint32_t)tailOffset)
+			//desc_t* headOffset = (desc_t*)((uint32_t)gpNetwork->NTXFH - (uint32_t)gpNetwork->NTXBP);
+			//desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NTXFT - (uint32_t)gpNetwork->NTXBP);
+			if( (gpNetwork->NTXFH +1)%gpNetwork->NTXBL == gpNetwork->NTXFT )
 			{
 				return NETWORK_TRANSMIT_BUFFER_FULL;
 			}
 
-			gpNetwork->NTXFH->pBuffer = (uint32_t)buffer;
+			(gpNetwork->NTXBP+gpNetwork->NTXFH)->pBuffer = (uint32_t)buffer;
 
 			//if Network Transmit is not in Progress then activate the transmit.
 			if(!gpNetwork-> NSTAT.NTIP)
@@ -159,6 +159,13 @@ typedef struct
 			return OPERATION_SUCCESS;
 		}
 
+		desc_t* getLastDesc(uint32_t tail, desc_t* bufferBase, uint32_t bufferSize)
+		{
+			uint32_t tailOffset = (tail+bufferSize-1)%bufferSize;
+			return gpNetwork->NRXBP+tailOffset;
+			//desc_t* tailOffset = (desc_t*)(tail-bufferBase);
+			//return  (desc_t*)((uint32_t)(tailOffset + bufferSize -1)%bufferSize);
+		}
 		_Interrupt1 void networkISR()
 		{
 			if(gpNetwork->NSTAT.NIRE.bits.RxComplete)
@@ -166,9 +173,9 @@ typedef struct
 				//Acknowledging the interrupt
 				gpNetwork->NSTAT.NIRE.bits.RxComplete = 0;
 
-				desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NRXFT - (uint32_t)gpNetwork->NRXBP);
-				//uint32_t lastDesc1 = (uint32_t)(tailOffset + gpNetwork->NRXBL - 1)%gpNetwork->NRXBL;
-				desc_t* lastDesc = (desc_t*)( ((uint32_t)(tailOffset + gpNetwork->NRXBL - 1))%gpNetwork->NRXBL);
+				//desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NRXFT - (uint32_t)gpNetwork->NRXBP);
+				//desc_t* lastDesc = (desc_t*)( ((uint32_t)(tailOffset + gpNetwork->NRXBL - 1))%gpNetwork->NRXBL);
+				desc_t* lastDesc = getLastDesc(gpNetwork->NRXFT,gpNetwork->NRXBP,gpNetwork->NRXBL);
 
 				gNetworkCallBacks.recieved_cb((uint8_t*)lastDesc->pBuffer,lastDesc->buff_size,lastDesc->reserved);
 
@@ -179,19 +186,18 @@ typedef struct
 				//Acknowledging the interrupt
 				gpNetwork->NSTAT.NIRE.bits.TxComplete = 0;
 
-				desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NTXFT - (uint32_t)gpNetwork->NTXBP);
-				desc_t* lastDesc = (desc_t*)((uint32_t)(tailOffset + gpNetwork->NTXBL - 1)%gpNetwork->NTXBL);
+				//desc_t* lastDesc = getLastDesc((uint32_t)gpNetwork->NTXFT,(uint32_t)gpNetwork->NTXBP,gpNetwork->NTXBL);
 
-				gNetworkCallBacks.transmitted_cb((uint8_t*)lastDesc->pBuffer,lastDesc->buff_size);
+				//gNetworkCallBacks.transmitted_cb((uint8_t*)lastDesc->pBuffer,lastDesc->buff_size);
 
-				//?????????????????????//
+				//***************************************//
 				//if Network Transmit is not in Progress, and the Transmit buffer is not empty
 				//then activate the next transmit.
 				if(!gpNetwork-> NSTAT.NTIP && gpNetwork->NTXFH!=gpNetwork->NTXFT)
 				{
 					gpNetwork->NTXFH++;
 				}
-				//?????????????????????//
+				//****************************************//
 
 			}
 			else if(gpNetwork->NSTAT.NIRE.bits.RxBufferTooSmall)
@@ -204,17 +210,16 @@ typedef struct
 			{
 				gpNetwork->NSTAT.NROR = 0;
 				gNetworkCallBacks.dropped_cb(CIRCULAR_BUFFER_FULL);
-
 			}
 			else if(gpNetwork->NSTAT.NIRE.bits.TxBadDescriptor)
 			{
-				gNetworkCallBacks.transmit_error_cb();
-
+				//desc_t* lastDesc = getLastDesc((uint32_t)gpNetwork->NTXFT,(uint32_t)gpNetwork->NTXBP,gpNetwork->NTXBL);
+				//gNetworkCallBacks.transmit_error_cb(BAD_DESCRIPTOR,(uint8_t*)lastDesc->pBuffer,lastDesc->buff_size,lastDesc->reserved);
 			}
 			else if(gpNetwork->NSTAT.NIRE.bits.TxNetworkError)
 			{
-				gNetworkCallBacks.transmit_error_cb();
-
+				//desc_t* lastDesc = getLastDesc((uint32_t)gpNetwork->NTXFT,(uint32_t)gpNetwork->NTXBP,gpNetwork->NTXBL);
+				//gNetworkCallBacks.transmit_error_cb(NETWORK_ERROR,(uint8_t*)lastDesc->pBuffer,lastDesc->buff_size,lastDesc->reserved);
 			}
 			else
 			{
