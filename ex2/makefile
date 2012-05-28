@@ -1,22 +1,22 @@
 all: flash.o input_panel.o LCD.o timer.o main.o a.out
 
 flash.o: flash/flash.c flash/flash.h
-	mcc -O0 -c -a6 -g -w3 $< -o $@
+	mcc -c -a6 -g -w3 $< -o $@
 
 input_panel.o: input_panel/input_panel.c input_panel/input_panel.h
-	mcc -O0 -c -a6 -g -w3 $< -o $@
+	mcc -c -a6 -g -w3 $< -o $@
 	
 LCD.o: LCD/LCD.c LCD/LCD.h
-	mcc -O0 -c -a6 -g -w3 $< -o $@
+	mcc -c -a6 -g -w3 $< -o $@
 
 network.o: network/network.c network/network.h 
-	mcc -O0 -c -a6 -g -w3 $< -o $@	
+	mcc -c -a6 -g -w3 $< -o $@	
 
 timer.o: timer/timer.c timer/timer.h
-	mcc -O0 -c -a6 -g -w3 $< -o $@
+	mcc -c -a6 -g -w3 $< -o $@
 
 main.o:	main.c timer.o LCD.o flash.o input_panel.o
-	mcc -O0 -c -a6 -g -w3 $< -o $@   
+	mcc -c -a6 -g -w3 $< -o $@   
 
 a.out: main.o timer.o LCD.o input_panel.o flash.o ivt.s device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map -Hldopt=-uInterruptTable
