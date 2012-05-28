@@ -1,71 +1,71 @@
 #include "network.h"
 
 #define NETWORK_BASE_ADDR 0x200000
-
+#define BUFFER_EMPTY(b) gpNetwork->N##b##XFH==gpNetwork->N##b##XFT
 //pack the struct with no internal spaces
 #pragma pack(1)
 typedef struct
 		{
-	uint32_t NTXBP;
+	desc_t* NTXBP;
 	uint32_t NTXBL;
-	uint32_t NTXFH;
-	uint32_t NTXFT;
+	desc_t* NTXFH;
+	desc_t* NTXFT;
 
-	uint32_t NRXBP;
+	desc_t* NRXBP;
 	uint32_t NRXBL;
-	uint32_t NRXFH;
-	uint32_t NRXFT;
+	desc_t* NRXFH;
+	desc_t* NRXFT;
 
 	struct
 	{
-//		uint32_t data;
-//		struct
-//		{
-			uint8_t NBSY							:1;
-			uint8_t enableTxInterrupt				:1;
-			uint8_t enableRxInterrupt				:1;
-			uint8_t enablePacketDroppedInterrupt	:1;
-			uint8_t enableTransmitErrorInterrupt	:1;
-			uint32_t reserved						:24;
-			union
+		//		uint32_t data;
+		//		struct
+		//		{
+		uint8_t NBSY							:1;
+		uint8_t enableTxInterrupt				:1;
+		uint8_t enableRxInterrupt				:1;
+		uint8_t enablePacketDroppedInterrupt	:1;
+		uint8_t enableTransmitErrorInterrupt	:1;
+		uint32_t reserved						:24;
+		union
+		{
+			uint8_t data						:3;
+			struct
 			{
-				uint8_t data						:3;
-				struct
-				{
-					uint8_t normal      		:1;
-					uint8_t SmscConnectivity    :1;
-					uint8_t internalLoopback   	:1;
-				}bits;
-			}NOM;
-//		}
+				uint8_t normal      		:1;
+				uint8_t SmscConnectivity    :1;
+				uint8_t internalLoopback   	:1;
+			}bits;
+		}NOM;
+		//		}
 	}NCTRL;
 
 	struct
 	{
-//		uint32_t data;
-//		struct
-//		{
-			uint8_t NTIP		:1;
-			uint8_t reserved1	:1;
-			uint8_t NRIP		:1;
-			uint8_t NROR		:1;
-			uint8_t reserved2	:4;
-			union
+		//		uint32_t data;
+		//		struct
+		//		{
+		uint8_t NTIP		:1;
+		uint8_t reserved1	:1;
+		uint8_t NRIP		:1;
+		uint8_t NROR		:1;
+		uint8_t reserved2	:4;
+		union
+		{
+			uint8_t data;
+			struct
 			{
-				uint8_t data;
-				struct
-				{
-					uint8_t RxComplete      	:1;
-					uint8_t TxComplete      	:1;
-					uint8_t RxBufferTooSmall   	:1;
-					uint8_t CircularBufferFulll	:1;
-					uint8_t TxBadDescriptor  	:1;
-					uint8_t TxNetworkError     	:1;
-					uint8_t reserved           	:2;
-				}bits;
-			}NIRE;
-			uint16_t reserved	:16;
-//		}
+				uint8_t RxComplete      	:1;
+				uint8_t TxComplete      	:1;
+				uint8_t RxBufferTooSmall   	:1;
+				uint8_t CircularBufferFulll	:1;
+				uint8_t TxBadDescriptor  	:1;
+				uint8_t TxNetworkError     	:1;
+				uint8_t reserved           	:2;
+			}bits;
+		}NIRE;
+		uint16_t reserved	:16;
+		//		}
 	}NSTAT;
 		} volatile NetworkRegs;
 #pragma pack();
@@ -73,6 +73,7 @@ typedef struct
 		//cost the NETWORK_BASE_ADDR to the NetworkRegs struct
 		NetworkRegs* gpNetwork = (NetworkRegs*)(NETWORK_BASE_ADDR);
 
+		network_call_back_t gNetworkCallBacks;
 		uint32_t gNetworkData[NETWORK_MAXIMUM_TRANSMISSION_UNIT];
 		network_operating_mode_t gNetworkOperMode;
 		network_init_params_t gNetworkParams;
@@ -90,10 +91,23 @@ typedef struct
 			}
 
 			gNetworkParams = *init_params;
-			gpNetwork->NTXBP = (uint32_t)init_params->transmit_buffer;
+			gNetworkCallBacks = init_params->list_call_backs;
+			gpNetwork->NTXBP = init_params->transmit_buffer;
 			gpNetwork->NTXBL = init_params->size_t_buffer;
-			gpNetwork->NRXBP = (uint32_t)init_params->recieve_buffer;
+			gpNetwork->NTXFH = gpNetwork->NTXBP;
+			gpNetwork->NTXFT = gpNetwork->NTXBP;
+
+			gpNetwork->NRXBP = init_params->recieve_buffer;
 			gpNetwork->NRXBL = init_params->size_r_buffer;
+			gpNetwork->NRXFH = gpNetwork->NRXBP;
+			gpNetwork->NRXFT = gpNetwork->NRXBP;
+
+			gpNetwork->NCTRL.enableTxInterrupt = 1;
+			gpNetwork->NCTRL.enableRxInterrupt = 1;
+			gpNetwork->NCTRL.enablePacketDroppedInterrupt = 1;
+			gpNetwork->NCTRL.enableTransmitErrorInterrupt = 1;
+			gpNetwork->NCTRL.NBSY = 0;
+			//			gpNetwork->NCTRL.NOM.data = NETWORK_OPERATING_MODE_NORMAL;
 			return OPERATION_SUCCESS;
 		}
 
@@ -126,9 +140,68 @@ typedef struct
 			}
 
 
-			//      if()
-			//      return NETWORK_TRANSMIT_BUFFER_FULL;
+			if( ((uint32_t)(gpNetwork->NTXFH + 1))%gpNetwork->NTXBL == (uint32_t)gpNetwork->NTXFT)
+			{
+				return NETWORK_TRANSMIT_BUFFER_FULL;
+			}
+
+			gpNetwork->NTXFH->pBuffer = (uint32_t)buffer;
+
+			//if Network Transmit is not in Progress then activate the transmit.
+			if(!gpNetwork-> NSTAT.NTIP)
+			{
+				gpNetwork->NTXFH++;
+			}
+
 
 			return OPERATION_SUCCESS;
 		}
 
+		_Interrupt1 void networkISR()
+		{
+			if(gpNetwork->NSTAT.NIRE.bits.RxComplete)
+			{
+				//Acknowledging the interrupt
+				gpNetwork->NSTAT.NIRE.bits.RxComplete = 0;
+
+				gNetworkCallBacks.recieved_cb();
+
+			}else if(gpNetwork->NSTAT.NIRE.bits.TxComplete)
+			{
+				//Acknowledging the interrupt
+				gpNetwork->NSTAT.NIRE.bits.TxComplete = 0;
+
+				gNetworkCallBacks.transmitted_cb();
+
+				//?????????????????????//
+				//if Network Transmit is not in Progress, and the Transmit buffer is not empty
+				//then activate the next transmit.
+				if(!gpNetwork-> NSTAT.NTIP && gpNetwork->NTXFH!=gpNetwork->NTXFT)
+				{
+					gpNetwork->NTXFH++;
+				}
+				//?????????????????????//
+
+			}else if(gpNetwork->NSTAT.NIRE.bits.RxBufferTooSmall)
+			{
+				gpNetwork->NSTAT.NROR = 0;
+				gNetworkCallBacks.dropped_cb();
+
+			}else if(gpNetwork->NSTAT.NIRE.bits.CircularBufferFulll)
+			{
+				gpNetwork->NSTAT.NROR = 0;
+				gNetworkCallBacks.dropped_cb();
+
+			}else if(gpNetwork->NSTAT.NIRE.bits.TxBadDescriptor)
+			{
+				gNetworkCallBacks.transmit_error_cb();
+
+			}else if(gpNetwork->NSTAT.NIRE.bits.TxNetworkError)
+			{
+				gNetworkCallBacks.transmit_error_cb();
+
+			}else
+			{
+				DBG_ASSERT(false);
+			}
+		}

@@ -83,7 +83,7 @@ typedef  void (*network_transmit_error_cb)(transmit_error_reason_t,
 
 typedef struct
 {
-	network_packet_transmitted_cb	        transmitted_cb;
+	network_packet_transmitted_cb	transmitted_cb;
 	network_packet_received_cb		recieved_cb;
 	network_packet_dropped_cb		dropped_cb;
 	network_transmit_error_cb		transmit_error_cb;
