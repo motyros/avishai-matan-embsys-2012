@@ -2,6 +2,7 @@
 #include "input_panel/input_panel.h"
 #include "flash/flash.h"
 #include "LCD/LCD.h"
+#include "network/network.h"
 
 int gCounter = 0;
 uint32_t gA = 0;
@@ -141,24 +142,30 @@ void networkTest()
     networkInit.recieve_buffer = recBuf;
     networkInit.size_r_buffer = NET_BUF_SIZE;
     uint8_t buf[NET_BUF_SIZE];
-    buf[0]=0,buf[1]=1,buf[2]=2;
-    tranBuf[0].pBuffer = (uint32_t)buf;
+
+
+
+    buf[0]='a',buf[1]='b',buf[2]='c';
+
+
     network_init(&networkInit);
     network_set_operating_mode(NETWORK_OPERATING_MODE_NORMAL);
-    network_send_packet_start((uint8_t*)tranBuf[0].pBuffer,NET_BUF_SIZE,3);
-    uint32_t s = sizeof(desc_t*);
+
+    network_send_packet_start((uint8_t*)buf,NET_BUF_SIZE,3);
+
+    return;
 }
 
 void main()
 {
     _enable();
-
+    networkTest();
     //verified - working!
 	//timerTest();
     
-    lcd_init(flushComplete);
+    //lcd_init(flushComplete);
     //lcdTest();
-    flashTest();
+    //flashTest();
     while(true)
     {
         //counter

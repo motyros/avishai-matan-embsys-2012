@@ -15,10 +15,10 @@ network.o: network/network.c network/network.h
 timer.o: timer/timer.c timer/timer.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o:	main.c timer.o LCD.o flash.o input_panel.o
+main.o:	main.c timer.o LCD.o flash.o input_panel.o network.o
 	mcc -c -a6 -g -w3 $< -o $@   
 
-a.out: main.o timer.o LCD.o input_panel.o flash.o ivt.s device.svr3
+a.out: main.o timer.o LCD.o input_panel.o flash.o network.o ivt.s device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map -Hldopt=-uInterruptTable
 
 dump:
