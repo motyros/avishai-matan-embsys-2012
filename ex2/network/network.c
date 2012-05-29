@@ -171,12 +171,84 @@ typedef struct
 
 NetworkRegsOld gTest;
 */
+
+typedef struct
+{
+	desc_t* NTXBP;
+	uint32_t NTXBL;
+	uint32_t NTXFH;
+	uint32_t NTXFT;
+
+	desc_t* NRXBP;
+	uint32_t NRXBL;
+	uint32_t NRXFH;
+	uint32_t NRXFT;
+
+	union
+	{
+		uint32_t data;
+		struct
+		{
+			uint8_t NBSY							:1;
+			uint8_t enableTxInterrupt               :1;
+			uint8_t enableRxInterrupt               :1;
+			uint8_t enablePacketDroppedInterrupt    :1;
+			uint8_t enableTransmitErrorInterrupt    :1;
+			uint32_t reserved                       :24;
+			union
+			{
+				uint8_t data						:3;
+				struct
+				{
+					uint8_t normal                  :1;
+					uint8_t SmscConnectivity    	:1;
+					uint8_t internalLoopback        :1;
+				}bits;
+			}NOM;
+		}bits;
+	}NCTRL;
+
+
+
+	union
+	{
+		uint32_t data;
+		struct
+		{
+			uint8_t NTIP            :1;
+			uint8_t reserved1       :1;
+			uint8_t NRIP            :1;
+			uint8_t NROR            :1;
+			uint8_t reserved2       :4;
+			union
+			{
+				uint8_t data;
+				struct
+				{
+					uint8_t RxComplete              :1;
+					uint8_t TxComplete              :1;
+					uint8_t RxBufferTooSmall        :1;
+					uint8_t CircularBufferFull      :1;
+					uint8_t TxBadDescriptor         :1;
+					uint8_t TxNetworkError          :1;
+					uint8_t reserved                :2;
+				}bits;
+			}NIRE;
+			uint16_t reserved       :16;
+		}bits;
+
+	}NSTAT;
+
+
+}volatile NetworkRegsNew;
 #pragma pack()
 
 
-//void test()
-//{
-//	uint32_t a,b,c,d;
+void test()
+{
+	uint32_t a;
+	a = sizeof(NetworkRegsNew);
+	a = a * 10;
 //	//NetworkRegs tt;
 //	a = sizeof(NetworkRegs1);
 //
@@ -184,7 +256,7 @@ NetworkRegsOld gTest;
 //	c = sizeof(NSTATReg);
 //	d = sizeof(NetworkRegsOld);
 //	d = a+b+c;
-//}
+}
 
 //cost the NETWORK_BASE_ADDR to the NetworkRegs struct
 NetworkRegs* gpNetwork = (NetworkRegs*)(NETWORK_BASE_ADDR);
@@ -196,6 +268,7 @@ network_call_back_t gNetworkCallBacks;
 
 result_t network_init(const network_init_params_t *init_params)
 {
+	test();
 	if(!init_params || !init_params->transmit_buffer || !init_params->recieve_buffer)
 	{
 		return NULL_POINTER;
