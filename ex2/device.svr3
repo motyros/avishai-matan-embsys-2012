@@ -1,7 +1,7 @@
 //memory mapping file. file format taken from lecture 3 slides (Embedded Systems Building)
 
 ROM_START = 0x0;
-ROM_SIZE = 16K;
+ROM_SIZE = 32K;
 SRAM_START = 0x80000;
 SRAM_SIZE = 48K;
 

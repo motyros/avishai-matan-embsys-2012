@@ -135,8 +135,12 @@ void timerTest()
 network_init_params_t networkInit;
 desc_t tranBuf[NET_BUF_SIZE];
 desc_t recBuf[NET_BUF_SIZE];
+uint8_t recData[NET_BUF_SIZE*161];
 void networkTest()
 {
+    recBuf[0].pBuffer = (uint32_t)recData;
+    recBuf[0].buff_size = 161;
+
     networkInit.transmit_buffer = tranBuf;
     networkInit.size_t_buffer = NET_BUF_SIZE;
     networkInit.recieve_buffer = recBuf;

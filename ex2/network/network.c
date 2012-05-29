@@ -19,23 +19,14 @@ typedef struct
 
 	struct
 		{
-			uint8_t NBSY							:1;
+			uint8_t NBSY				:1;
 			uint8_t enableTxInterrupt               :1;
 			uint8_t enableRxInterrupt               :1;
 			uint8_t enablePacketDroppedInterrupt    :1;
 			uint8_t enableTransmitErrorInterrupt    :1;
 			uint32_t reserved                       :24;
-			union
-			{
-				uint8_t data                        :3;
-				struct
-				{
-					uint8_t normal                  :1;
-					uint8_t SmscConnectivity    	:1;
-					uint8_t internalLoopback        :1;
-				}bits;
-			}NOM;
-		}NCTRL;
+                        uint8_t NOM                             :3;
+                }NCTRL;
 
 		struct
 		{
@@ -187,7 +178,7 @@ typedef struct
 	union
 	{
 		uint32_t data;
-		struct
+            	struct
 		{
 			uint8_t NBSY							:1;
 			uint8_t enableTxInterrupt               :1;
@@ -195,17 +186,17 @@ typedef struct
 			uint8_t enablePacketDroppedInterrupt    :1;
 			uint8_t enableTransmitErrorInterrupt    :1;
 			uint32_t reserved                       :24;
-			union
-			{
+                    union
+                    {
 				uint8_t data						:3;
-				struct
+                        /*struct
 				{
 					uint8_t normal                  :1;
 					uint8_t SmscConnectivity    	:1;
 					uint8_t internalLoopback        :1;
-				}bits;
-			}NOM;
-		}bits;
+                                        }bits;*/
+                    }NOM
+                }bits;
 	}NCTRL;
 
 
@@ -213,7 +204,7 @@ typedef struct
 	union
 	{
 		uint32_t data;
-		struct
+            struct
 		{
 			uint8_t NTIP            :1;
 			uint8_t reserved1       :1;
@@ -235,8 +226,8 @@ typedef struct
 				}bits;
 			}NIRE;
 			uint16_t reserved       :16;
-		}bits;
-
+                        }bits;
+            
 	}NSTAT;
 
 
@@ -247,7 +238,7 @@ typedef struct
 void test()
 {
 	uint32_t a;
-	a = sizeof(NetworkRegsNew);
+	a = sizeof(NetworkRegs);
 	a = a * 10;
 //	//NetworkRegs tt;
 //	a = sizeof(NetworkRegs1);
@@ -305,7 +296,7 @@ result_t network_set_operating_mode(network_operating_mode_t new_mode)
 	//if()
 	//return INVALID_ARGUMENTS;
 
-	gpNetwork->NCTRL.NOM.data = (new_mode);
+	gpNetwork->NCTRL.NOM = (new_mode);
 
 	return OPERATION_SUCCESS;
 }
@@ -368,13 +359,13 @@ _Interrupt1 void networkISR()
 		//desc_t* tailOffset  = (desc_t*)((uint32_t)gpNetwork->NRXFT - (uint32_t)gpNetwork->NRXBP);
 		//desc_t* lastDesc = (desc_t*)( ((uint32_t)(tailOffset + gpNetwork->NRXBL - 1))%gpNetwork->NRXBL);
 		//desc_t* lastDesc = getLastDesc(gpNetwork->NRXFT,gpNetwork->NRXBP,gpNetwork->NRXBL);
-		desc_t* pPacket = gpNetwork->NTXBP+gpNetwork->NTXFH;
+		desc_t* pPacket = gpNetwork->NRXBP+gpNetwork->NRXFT;
+
+                //call cb
+                gNetworkCallBacks.recieved_cb((uint8_t*)pPacket->pBuffer,pPacket->buff_size,pPacket->reserved & 0xFF);
 
 		//increase the head pointer
-		gpNetwork->NRXFH = (gpNetwork->NRXFH + 1)%gpNetwork->NRXBL;
-
-		//call cb
-		gNetworkCallBacks.recieved_cb((uint8_t*)pPacket->pBuffer,pPacket->buff_size,pPacket->reserved & 0xFFFF);
+		gpNetwork->NRXFT = (gpNetwork->NRXFT + 1)%gpNetwork->NRXBL;
 
 	}
 	else if(gpNetwork->NSTAT.NIRE.bits.TxComplete)
