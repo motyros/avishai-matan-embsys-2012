@@ -105,7 +105,7 @@ void startNoneBlockingRead()
 	//go bit
 	cr.bits.SCGO = 1;
 
-	//todo
+	//set address to read from
 	_sr(gNoneBlockingStartAddress+gNoneBlockingBuffer.size,FLASH_ADDRESS_REG_ADDR);
 	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
@@ -113,15 +113,18 @@ void startNoneBlockingRead()
 }
 
 //finish none blocking read, update all relevant counters
-bool finishNoneBlockingRead()//todo
+bool finishNoneBlockingRead()
 {
-
+	//calculate how many bytes should been read
 	uint16_t transactionBytes = MIN(gNoneBlockingOpSize-gNoneBlockingBuffer.size,DATA_REG_BYTES);
 
+	//load read data from FDATA regs into our internal buffer
 	loadDataFromRegs(gNoneBlockingBuffer.data + gNoneBlockingBuffer.size,transactionBytes);
 
+	//advance buffer's suze
 	gNoneBlockingBuffer.size+=transactionBytes;
 
+	//return true iff we read all the bytes
 	return gNoneBlockingBuffer.size==gNoneBlockingOpSize;
 }
 
@@ -263,7 +266,7 @@ bool flash_is_ready(void)
 	return (gCurrentCommand==IDLE && flashIsIdle());
 }
 
-result_t flash_read_start(uint16_t start_address, uint16_t size)//todo
+result_t flash_read_start(uint16_t start_address, uint16_t size)
 {
 
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
@@ -284,6 +287,7 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)//todo
 	gCurrentCommand = NONE_BLOCKING_READ_DATA;
 	_enable();
 
+	//set the blocking globals with the transaction's data
 	gNoneBlockingBuffer.size = 0;
 	gNoneBlockingOpSize = size;
 	gNoneBlockingStartAddress = start_address;
@@ -295,7 +299,7 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)//todo
 }
 
 //load size bytes from FDATA regs to given buffer
-void loadDataFromRegs(uint8_t buffer[],const uint16_t size)//todo
+void loadDataFromRegs(uint8_t buffer[],const uint16_t size)
 {
 
 	uint32_t i=0,j,regIndex = 0,regData;
@@ -308,6 +312,8 @@ void loadDataFromRegs(uint8_t buffer[],const uint16_t size)//todo
 
 		regData = _lr(FLASH_FDATA_BASE_ADDR+regIndex);
 
+		//every register is 4 bytes (32 bits), break it to 4 bytes and copy each byte
+		//to our buffer
 		for(j = 0 ; j < 4 && i < size ; ++i,++j)
 		{
 			buffer[i] = pRegData[j];
@@ -352,7 +358,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 	while(readBytes < size)
 	{
 		//locate the maximal number of bytes that can be loaded from
-		//the flash in one request //todo
+		//the flash in one request
 		transactionBytes = MIN(size-readBytes,DATA_REG_BYTES);
 
 		cr.bits.FDBC = transactionBytes-1;
@@ -362,7 +368,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 
 		cr.bits.SCGO = 1;
 
-		//todo
+		//set the address to read from
 		_sr(start_address+readBytes,FLASH_ADDRESS_REG_ADDR);
 		_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
@@ -416,7 +422,7 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 		gNoneBlockingBuffer.data[i] = buffer[i];
 	}
 
-	//todo
+	//set the non blocking globals with the transaction data
 	gNoneBlockingBuffer.size = size;
 	gNoneBlockingOpSize = 0;
 	gNoneBlockingStartAddress = start_address;
@@ -435,7 +441,7 @@ void loadDataToRegs(const uint8_t buffer[],const uint16_t size)
 
 	for(i = 0 , regIndex = 0 ; i < size ; i+=4 , ++regIndex)
 	{
-		//todo
+		//store 4 bytes from our buffer into each FDATA 32bits registers (4 bytes each)
 		_sr((*(uint32_t*)(buffer+i)),FLASH_FDATA_BASE_ADDR+regIndex);
 	}
 }
