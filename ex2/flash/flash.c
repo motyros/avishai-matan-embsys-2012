@@ -221,8 +221,8 @@ _Interrupt1 void flashISR()
 
 }
 
-result_t flash_init( void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32_t size),
-		void (*flash_request_done_cb)(void))
+result_t flash_init(	void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32_t size),
+						void (*flash_request_done_cb)(void))
 {
 	if (!flash_data_recieve_cb || !flash_request_done_cb)
 	{
@@ -257,7 +257,7 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)
 
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
 
-	if (size > MAX_REQUEST_BUFFER_SIZE)
+	if (size==0 || size > MAX_REQUEST_BUFFER_SIZE)
 	{
 		return INVALID_ARGUMENTS;
 	}
@@ -318,7 +318,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 		return NULL_POINTER;
 	}
 
-	if (size > MAX_REQUEST_BUFFER_SIZE )
+	if (size==0 || size > MAX_REQUEST_BUFFER_SIZE )
 	{
 		return  INVALID_ARGUMENTS;
 	}
@@ -376,7 +376,7 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 		return NULL_POINTER;
 	}
 
-	if (size > MAX_REQUEST_BUFFER_SIZE)
+	if (size==0 || size > MAX_REQUEST_BUFFER_SIZE)
 	{
 		return  INVALID_ARGUMENTS;
 	}
@@ -433,7 +433,7 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 		return NULL_POINTER;
 	}
 
-	if (size > MAX_REQUEST_BUFFER_SIZE)
+	if (size==0 || size > MAX_REQUEST_BUFFER_SIZE)
 	{
 		return  INVALID_ARGUMENTS;
 	}

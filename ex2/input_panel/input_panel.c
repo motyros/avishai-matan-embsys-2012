@@ -25,6 +25,7 @@ _Interrupt1 void buttonPressedIsr()
     if((buttonsPressed>>i) & BIT0)
     {
       gpButtonPressedCB(0x001 << i);
+      return;
     }
   }
 }

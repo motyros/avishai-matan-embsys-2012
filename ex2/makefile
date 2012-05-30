@@ -1,4 +1,4 @@
-all: flash.o input_panel.o LCD.o timer.o main.o a.out
+all: ex2.a
 
 flash.o: flash/flash.c flash/flash.h
 	mcc -c -a6 -g -w3 $< -o $@
@@ -15,26 +15,24 @@ network.o: network/network.c network/network.h
 timer.o: timer/timer.c timer/timer.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o:	main.c timer.o LCD.o flash.o input_panel.o network.o
-	mcc -c -a6 -g -w3 $< -o $@   
+ivt.o: ivt.s
+	mcc -c -a6 -g -w3 $< -o $@
+	
+ex2.a: flash.o input_panel.o LCD.o network.o timer.o ivt.o
+	ar rv $@ $+ 
 
-a.out: main.o timer.o LCD.o input_panel.o flash.o network.o ivt.s device.svr3
+main.o: main.c
+	mcc -c -a6 -g -w3 $< -o $@
+	
+a.out: main.o ex2.a device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map -Hldopt=-uInterruptTable
 
-dump:
-	rm -f hex.txt
-	hexdump embsys_flash.img > hex.txt
-	gedit hex.txt &
 
-dump1: 
-	rm -f hex.txt
-	hexdump embsys_flash.img > hex.txt
-	emacs hex.txt  	
 tar:
-	tar cvf avishl02_matanp01 ... device.svr3 makefile README
+	tar cvf avishl02_matanp01 flash input_panel LCD network timer ivt.s README makefile
 
 clean: 
-	rm -f a.out main.o flash.o input_panel.o LCD.o network.o timer.o ivt.o
+	rm -f avishl02_matanp01 ex2.a *.o
 
 test: clean all tar
 	~embsys/ARC/MetaWare/arc/bin/embsys_check_ex2.sh avishl02_matanp01
