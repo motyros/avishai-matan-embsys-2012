@@ -27,7 +27,7 @@ typedef struct
 		{
 			uint32_t IE 		: 1;
 			uint32_t NH 		: 1;
-			uint32_t W		: 1;
+			uint32_t W			: 1;
 			uint32_t IP 		: 1;
 			uint32_t reserve 	: 28;
 		}bits;

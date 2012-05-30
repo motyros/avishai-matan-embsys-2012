@@ -1,0 +1,36 @@
+avishl02,matanp01 
+Avishai Lazar 066641200 
+Matan Perel 039998570 
+ 
+project: Exercise 1 
+ 
+submited files: 
+ 
+	README         - this file 
+	makefile     - a make file
+	7segments.c     - a 7segments driver implementation.   
+	7segments.h     - the 7segments driver header
+	clock.c        - a clock driver implementation.
+	clock.h        - the clock driver header
+	cyclicBuffer.c    - a cyclicBuffer implementation.
+	cyclicBuffer.h    - the cyclicBuffer header
+	defs.h        - defines for our source code
+	device.svr3     - SVR3 Command-File
+	uart.c        - an uart driver implementation.
+	uart.h        - the uart driver header
+	main.c        - the implementation for the asynchronous protocol. 
+ 
+============================remarks====================================
+* All the drivers we wrote in this exercise is polling-based, and we not used 
+interrupts, as required.
+
+* The cyclicBuffer used us in the implementation of the required asynchronous 
+protocol. we used it to store information (bytes) that came from the serial port,
+until it will have enough bytes to generate a full command (1 byte for the 
+command, 1 byte for the variable, and 2 bytes for the values). we had the need to use
+a buffer in order not to loose any incomming/outgoing bytes due to slow read/write
+
+* We thought to put the cyclicBuffer into the Uart driver, but we decided that 
+we want to simplifies much as possible the Uart. So the Uart reads and writes 
+only one byte a time. when we will support more complex messages, we will implement
+"readBuffer" and "writeBuffer" and the uart will handle it with internal buffer
