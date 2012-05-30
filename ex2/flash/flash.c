@@ -16,6 +16,7 @@
 #define FLASH_ADDRESS_REG_ADDR (FLASH_BASE_ADDR+0x2)
 #define FLASH_FDATA_BASE_ADDR (FLASH_BASE_ADDR+0x3)
 
+//wait for the flash hardware to be idle
 #define wait_for_flash_to_be_idle while(!flashIsIdle())
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
@@ -101,8 +102,10 @@ void startNoneBlockingRead()
 	//enable interrupts
 	cr.bits.SME = 1;
 
+	//go bit
 	cr.bits.SCGO = 1;
 
+	//todo
 	_sr(gNoneBlockingStartAddress+gNoneBlockingBuffer.size,FLASH_ADDRESS_REG_ADDR);
 	_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
@@ -110,8 +113,9 @@ void startNoneBlockingRead()
 }
 
 //finish none blocking read, update all relevant counters
-bool finishNoneBlockingRead()
+bool finishNoneBlockingRead()//todo
 {
+
 	uint16_t transactionBytes = MIN(gNoneBlockingOpSize-gNoneBlockingBuffer.size,DATA_REG_BYTES);
 
 	loadDataFromRegs(gNoneBlockingBuffer.data + gNoneBlockingBuffer.size,transactionBytes);
@@ -159,6 +163,11 @@ void performNoneBlockingWrite()
 //this is the interrupt service routine
 _Interrupt1 void flashISR()
 {
+	if ( ! (_lr(0X151) & 0x2) )
+	{
+		_sr( 0x2, 0x150 );
+		return;
+	}
 	//acknowledge the interrupt
 	FlashStatusRegister sr = {0};
 	sr.bits.cycleDone = 1;
@@ -208,6 +217,7 @@ _Interrupt1 void flashISR()
 		break;
 	case BLOCK_ERASE:
 	case BULK_ERASE:
+		//erase done
 		gCurrentCommand = IDLE;
 		gpFlashRequestDoneCB();
 		break;
@@ -230,6 +240,7 @@ result_t flash_init(	void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32
 	}
 	else
 	{
+		//store the cb
 		gpFlashDataReciveCB = flash_data_recieve_cb;
 		gpFlashRequestDoneCB = flash_request_done_cb;
 
@@ -252,7 +263,7 @@ bool flash_is_ready(void)
 	return (gCurrentCommand==IDLE && flashIsIdle());
 }
 
-result_t flash_read_start(uint16_t start_address, uint16_t size)
+result_t flash_read_start(uint16_t start_address, uint16_t size)//todo
 {
 
 	DBG_ASSERT(start_address + size*8 < FLASH_CAPACITY);
@@ -262,6 +273,7 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)
 		return INVALID_ARGUMENTS;
 	}
 
+	//check if flash is ready
 	_disable();
 	if (!flash_is_ready())
 	{
@@ -283,7 +295,7 @@ result_t flash_read_start(uint16_t start_address, uint16_t size)
 }
 
 //load size bytes from FDATA regs to given buffer
-void loadDataFromRegs(uint8_t buffer[],const uint16_t size)
+void loadDataFromRegs(uint8_t buffer[],const uint16_t size)//todo
 {
 
 	uint32_t i=0,j,regIndex = 0,regData;
@@ -323,21 +335,24 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 		return  INVALID_ARGUMENTS;
 	}
 
+	//check if flash is ready
 	_disable();
 	if (!flash_is_ready())
 	{
 		_enable();
 		return NOT_READY;
 	}
-
+	//change to the current command
 	gCurrentCommand = BLOCKING_READ_DATA;
 	_enable();
 
 	cr.bits.CMD = READ_DATA;
 
-	//no need to set current command, since this is single thread program and this is blocking function
+	//
 	while(readBytes < size)
 	{
+		//locate the maximal number of bytes that can be loaded from
+		//the flash in one request //todo
 		transactionBytes = MIN(size-readBytes,DATA_REG_BYTES);
 
 		cr.bits.FDBC = transactionBytes-1;
@@ -347,17 +362,19 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 
 		cr.bits.SCGO = 1;
 
+		//todo
 		_sr(start_address+readBytes,FLASH_ADDRESS_REG_ADDR);
 		_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
+		//wait for the flash hardware to be idle
 		wait_for_flash_to_be_idle;
 
+		//load the date from the flash regs
 		loadDataFromRegs(buffer+readBytes,transactionBytes);
 
+		//update the number of bytes that was read
 		readBytes+=transactionBytes;
-
 	}
-
 	gCurrentCommand = IDLE;
 
 	return OPERATION_SUCCESS;
@@ -381,6 +398,7 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 		return  INVALID_ARGUMENTS;
 	}
 
+	//check if flash is ready
 	_disable();
 	if (!flash_is_ready())
 	{
@@ -388,6 +406,7 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 		return NOT_READY;
 	}
 
+	//change to the current command
 	gCurrentCommand = NONE_BLOCKING_PAGE_PROGRAM;
 	_enable();
 
@@ -397,6 +416,7 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 		gNoneBlockingBuffer.data[i] = buffer[i];
 	}
 
+	//todo
 	gNoneBlockingBuffer.size = size;
 	gNoneBlockingOpSize = 0;
 	gNoneBlockingStartAddress = start_address;
@@ -415,6 +435,7 @@ void loadDataToRegs(const uint8_t buffer[],const uint16_t size)
 
 	for(i = 0 , regIndex = 0 ; i < size ; i+=4 , ++regIndex)
 	{
+		//todo
 		_sr((*(uint32_t*)(buffer+i)),FLASH_FDATA_BASE_ADDR+regIndex);
 	}
 }
@@ -438,12 +459,15 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 		return  INVALID_ARGUMENTS;
 	}
 
+	//check if flash is ready
 	_disable();
 	if (!flash_is_ready())
 	{
 		_enable();
 		return NOT_READY;
 	}
+
+	//change to the current command
 	gCurrentCommand = BLOCKING_PAGE_PROGRAM;
 	_enable();
 
@@ -470,10 +494,11 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 		//perform writing
 		_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
+		//update the number of bytes that was written
 		writtenBytes+=transactionBytes;
 
+		//wait for the flash hardware to be idle
 		wait_for_flash_to_be_idle;
-
 	}
 
 	gCurrentCommand = IDLE;
@@ -486,6 +511,7 @@ result_t flash_bulk_erase_start(void)
 {
 	FlashControlRegister cr = {0};
 
+	//check if flash is ready
 	_disable();
 	if (!flash_is_ready())
 	{
@@ -493,6 +519,7 @@ result_t flash_bulk_erase_start(void)
 		return NOT_READY;
 	}
 
+	//change to the current command
 	gCurrentCommand = BULK_ERASE;
 	_enable();
 
@@ -515,6 +542,7 @@ result_t flash_block_erase_start(uint16_t start_address)
 
 	FlashControlRegister cr = {0};
 
+	//check if flash is ready
 	_disable();
 	if (!flash_is_ready())
 	{
@@ -522,7 +550,7 @@ result_t flash_block_erase_start(uint16_t start_address)
 		return NOT_READY;
 	}
 
-	//the ISR should clean this var
+	//change to the current command
 	gCurrentCommand = BLOCK_ERASE;
 	_enable();
 

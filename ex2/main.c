@@ -285,11 +285,19 @@ void buttonPressed1(button but)
     }
 
 
-    if(but == BUTTON_STAR) sel = sel ? false : true;
+    if(but == BUTTON_STAR)
+    {
+    	sel = sel ? false : true;
+    	lcd_set_row(rowNum,sel,row,rowLen);
+    }
+    else
+    {
+    	row[charNum++] = buttonToChar(but);
+    	lcd_set_row(rowNum,sel,row,rowLen);
 
-    row[charNum++] = buttonToChar(but);
-    lcd_set_row(rowNum,sel,row,rowLen);
-    //if(but == BUTTON_OK)
+    }
+
+     //if(but == BUTTON_OK)
 }
 
 testType()
@@ -304,14 +312,15 @@ testType()
 void main()
 {
     _enable();
-    lcd_init(flushComplete);
+
     //networkTest();
     //verified - working!
 	//timerTest();
+    testType();
     
-
+    //lcd_init(flushComplete);
     //lcdTest();
-    flashTest();
+    //flashTest();
     while(true)
     {
         //counter
@@ -319,7 +328,7 @@ void main()
         //control
         gB = _lr(0x22);
         //limit
-        gC = _lr(0x23);
+        //gC = _lr(0x23);
         gA = gA+1;
     }
 }

@@ -24,6 +24,7 @@ typedef union
 	}byte;
 }LcdCharacter;
 
+//the data of the lcd
 LcdCharacter gLcdData[LCD_LINE_LENGTH*LCD_NUM_LINES];
 
 #pragma pack()
@@ -43,13 +44,15 @@ result_t lcd_init(void (*flush_complete_cb)(void))
         	return NULL_POINTER;
     }
 
-	//initilize the LCD screen data
+	//Initialize the LCD screen data
 	for(i=0 ; i<LCD_LINE_LENGTH*LCD_NUM_LINES ; ++i)
 	{
 		gLcdData[i].byte.charEncode = INIT_CHAR;
 	}
 	
+	//save the cb
     gpFlushCompleteCB = flush_complete_cb;
+
     return OPERATION_SUCCESS;
 }
 
@@ -67,6 +70,7 @@ result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8
 		return INVALID_ARGUMENTS;	
 	}
 
+	//check the DCMD reg
 	if(_lr(LCD_DCMD_ADDR)&BIT0)
 	{	
 		return NOT_READY;
@@ -82,6 +86,7 @@ result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8
 		bitSelected = 1;	
 	}
 	//note:row_number starts from 0
+	//the offset of the correct row
 	uint32_t rowBytesOffset = LCD_LINE_LENGTH * row_number;
 	
 	//write the data to the gLcdData array

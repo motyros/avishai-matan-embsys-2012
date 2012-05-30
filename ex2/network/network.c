@@ -56,8 +56,6 @@ typedef struct
 
 #pragma pack()
 
-
-
 //cost the NETWORK_BASE_ADDR to the NetworkRegs struct
 NetworkRegs* gpNetwork = (NetworkRegs*)(NETWORK_BASE_ADDR);
 
@@ -84,13 +82,14 @@ result_t network_init(const network_init_params_t *init_params)
 		return INVALID_ARGUMENTS;
 	}
 
-	//set parameters
+	//set transmit parameters
 	gNetworkCallBacks = init_params->list_call_backs;
 	gpNetwork->NTXBP = init_params->transmit_buffer;
 	gpNetwork->NTXBL = init_params->size_t_buffer;
 	gpNetwork->NTXFH = 0;
 	gpNetwork->NTXFT = 0;
 
+	//set recieve parameters
 	gpNetwork->NRXBP = init_params->recieve_buffer;
 	gpNetwork->NRXBL = init_params->size_r_buffer;
 	gpNetwork->NRXFH = 0;
@@ -108,7 +107,10 @@ result_t network_init(const network_init_params_t *init_params)
 
 result_t network_set_operating_mode(network_operating_mode_t new_mode)
 {
-	if(new_mode > NETWORK_OPERATING_MODE_INTERNAL_LOOPBACK)
+	if(new_mode!=NETWORK_OPERATING_MODE_INTERNAL_LOOPBACK &&
+			new_mode!=NETWORK_OPERATING_MODE_NORMAL &&
+			new_mode!=NETWORK_OPERATING_MODE_SMSC &&
+			new_mode!=NETWORK_OPERATING_MODE_RESERVE)
 	{
 		return INVALID_ARGUMENTS;
 	}
@@ -135,7 +137,7 @@ result_t network_send_packet_start(const uint8_t buffer[], uint32_t size, uint32
 		return OPERATION_SUCCESS;
 	}
 
-
+	//if the head is 1 cell behind the tail - the buffer is full
 	if( (gpNetwork->NTXFH +1)%gpNetwork->NTXBL == gpNetwork->NTXFT )
 	{
 		return NETWORK_TRANSMIT_BUFFER_FULL;
@@ -151,18 +153,18 @@ result_t network_send_packet_start(const uint8_t buffer[], uint32_t size, uint32
 	//advance head pointer
 	gpNetwork->NTXFH = (gpNetwork->NTXFH+1)%(gpNetwork->NTXBL);
 
-
 	return OPERATION_SUCCESS;
 }
 
 
 _Interrupt1 void networkISR()
 {
-	//Important note. the order of those events important since in Loopback mode if we handle
-	//Rx before Tx, Rx will be asserted again, need to Ack Tx before Ack Rx
+	//Important note: the order of those events important since in Loopback mode
+	//if we handle Rx before Tx, Rx will be asserted again, need to Ack Tx
+	//before Ack Rx
 	if(gpNetwork->NSTAT.NIRE.bits.TxComplete)
 	{
-
+		//locate the transmitted packet
 		desc_t* pPacket = gpNetwork->NTXBP+gpNetwork->NTXFT;
 
 		//advance tail cyclically by one
@@ -171,12 +173,13 @@ _Interrupt1 void networkISR()
 		//Acknowledging the interrupt
 		gpNetwork->NSTAT.NIRE.bits.TxComplete = 1;
 
-		//call cb
+		//call cb with the transmitted packet
 		gNetworkCallBacks.transmitted_cb((uint8_t*)pPacket->pBuffer,pPacket->buff_size);
 
 	}
 	else if(gpNetwork->NSTAT.NIRE.bits.RxComplete)
 	{
+		//locate the received packet
 		desc_t* pPacket = gpNetwork->NRXBP+gpNetwork->NRXFT;
 
 		//increase the head pointer
@@ -185,7 +188,7 @@ _Interrupt1 void networkISR()
 		//Acknowledging the interrupt
 		gpNetwork->NSTAT.NIRE.bits.RxComplete = 1;
 
-        //call cb
+        //call cb with the received packet
         gNetworkCallBacks.recieved_cb((uint8_t*)pPacket->pBuffer,pPacket->buff_size,pPacket->reserved & 0xFF);
 
 
@@ -194,6 +197,7 @@ _Interrupt1 void networkISR()
 	{
 		//Ack the interrupt
 		gpNetwork->NSTAT.NIRE.bits.RxBufferTooSmall = 1;
+		//call the cb
 		gNetworkCallBacks.dropped_cb(RX_BUFFER_TOO_SMALL);
 
 	}
@@ -201,11 +205,12 @@ _Interrupt1 void networkISR()
 	{
 		//Ack the interrupt
 		gpNetwork->NSTAT.NIRE.bits.CircularBufferFull = 1;
+		//call the cb
 		gNetworkCallBacks.dropped_cb(CIRCULAR_BUFFER_FULL);
 	}
 	else if(gpNetwork->NSTAT.NIRE.bits.TxBadDescriptor)
 	{
-
+		//locate the bad packet
 		desc_t* pPacket = gpNetwork->NTXBP+gpNetwork->NTXFT;
 
 		//advance tail cyclically by one
@@ -214,12 +219,12 @@ _Interrupt1 void networkISR()
 		//Ack the interrupt
 		gpNetwork->NSTAT.NIRE.bits.TxBadDescriptor = 1;
 
-		//call cb
+		//call cb with the packet
 		gNetworkCallBacks.transmit_error_cb(BAD_DESCRIPTOR,(uint8_t*)pPacket->pBuffer,pPacket->buff_size,pPacket->reserved & 0xFFFF);
 	}
 	else if(gpNetwork->NSTAT.NIRE.bits.TxNetworkError)
 	{
-
+		//locate the packet
 		desc_t* pPacket = gpNetwork->NTXBP+gpNetwork->NTXFT;
 
 		//advance tail cyclically by one
@@ -228,7 +233,7 @@ _Interrupt1 void networkISR()
 		//Ack the interrupt
 		gpNetwork->NSTAT.NIRE.bits.TxNetworkError = 1;
 
-		//call cb
+		//call cb with the packet
 		gNetworkCallBacks.transmit_error_cb(NETWORK_ERROR,(uint8_t*)pPacket->pBuffer,pPacket->buff_size,pPacket->reserved & 0xFFFF);
 	}
 	else

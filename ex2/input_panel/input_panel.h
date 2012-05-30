@@ -23,9 +23,9 @@ typedef enum
 	BUTTON_7 			= 	(0x001 << 7),
 	BUTTON_8 			=	(0x001 << 8),
 	BUTTON_9 			= 	(0x001 << 9),
-	BUTTON_STAR 		        = 	(0x001 << 10),
+	BUTTON_STAR 		= 	(0x001 << 10),
 	BUTTON_0 			= 	(0x001 << 11),
-	BUTTON_NUMBER_SIGN 	        = 	(0x001 << 12),
+	BUTTON_NUMBER_SIGN 	= 	(0x001 << 12),
 
 }button;
 

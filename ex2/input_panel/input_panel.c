@@ -11,23 +11,17 @@
 
 void (*gpButtonPressedCB)(button);
 
-_Interrupt1 void buttonPressedIsr()
+_Interrupt1 void buttonPressedISR()
 {
   uint8_t i;
   uint32_t buttonsPressed;
   
   //load the register
   buttonsPressed = _lr(INPUT_PANEL_PADSTAT_ADDR);
+
+  //call the cb
+  gpButtonPressedCB(buttonsPressed);
   
-  for(i = 0 ; i < INPUT_PANEL_NUM_OF_BUTTONS ; ++i)
-  {
-    //if the "i" button is pressed call the CB function
-    if((buttonsPressed>>i) & BIT0)
-    {
-      gpButtonPressedCB(0x001 << i);
-      return;
-    }
-  }
 }
 
 result_t ip_init(void (*button_pressed_cb)(button))
@@ -37,7 +31,10 @@ result_t ip_init(void (*button_pressed_cb)(button))
         return NULL_POINTER;
     }
 
+    //store the cb
     gpButtonPressedCB = button_pressed_cb;
+
+    //disable the button interrupts
     ip_disable();
 
     return OPERATION_SUCCESS;

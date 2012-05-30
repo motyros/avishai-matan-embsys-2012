@@ -21,6 +21,12 @@ ivt.o: ivt.s
 ex2.a: flash.o input_panel.o LCD.o network.o timer.o ivt.o
 	ar rv $@ $+ 
 
+main.o: main.c flash.o input_panel.o LCD.o network.o timer.o common_defs.h 
+	mcc -c -a6 -g -w3 $< -o $@
+
+a.out: main.o flash.o input_panel.o LCD.o network.o timer.o ivt.o device.svr3
+	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map
+
 tar:
 	tar --exclude=".*" -cvjf avishl02_matanp01 flash input_panel LCD network timer ivt.s common_defs.h README makefile
 
