@@ -13,7 +13,6 @@ void (*gpButtonPressedCB)(button);
 
 _Interrupt1 void buttonPressedISR()
 {
-  uint8_t i;
   uint32_t buttonsPressed;
   
   //load the register

@@ -9,6 +9,7 @@ submited files:
 	README				- this file 
 	makefile     			- a make file
 	ivt.s				- interrupt vector table
+        common_defs.h                   - common definitions for the library
 	input_panel/input_panel.c	- input panel's driver
 	input_panel/input_panel.h	- input panel's driver's interface
 	flash/flash.c			- flash memory's driver
