@@ -14,29 +14,77 @@ typedef enum
     OUTGOING_MESSAGE		= 1,	
 } message_type;
 
-typedef struct
-{
-	//serial number
-	//number
-	//text
-	//textlength
-	//timestamp
-}SMS,*SMSPtr;
+/*
+typedef struct _SMS_DELIVER {
+
+  char sender_id[ID_MAX_LENGTH];
+  char timestamp[TIMESTAMP_MAX_LENGTH];
+  unsigned data_length;  
+  char data[DATA_MAX_LENGTH];
+
+}SMS_DELIVER;
+
+typedef struct _SMS_SUBMIT {
+
+  char device_id[ID_MAX_LENGTH];
+  char msg_reference;
+  char recipient_id[ID_MAX_LENGTH];  
+  unsigned data_length;  
+  char data[DATA_MAX_LENGTH];
+
+}SMS_SUBMIT;
+*/
+
+#define
 
 typedef struct
 {
-	SMSLinkPtr 	pNext;
-	SMSLinkPtr 	pPrev;
-	SMSPtr 		pSMS;
-}SMSLinkNode,*SMSLinkNodePtr;
+	SmsLinkPtr 	pNext;
+	SmsLinkPtr 	pPrev;
+	message_type	type;
+	void* 		pSMS;
+}SmsLinkNode,*SmsLinkNodePtr;
 
-SMSLinkNode gSMSList;
+typedef struct
+{
+	SmsLinkPtr 	pHead;
+	SmsLinkPtr 	pTail;
+	int 		size;
+}SmsLinkedList;
+
+SmsLinkedList gSmsDb;
 
 screen_type gCurrentScreen;
-SMSPtr	    gpSelectedSms;
+
+SmsLinkNodePtr gpSelectedSms;
+
+SmsLinkNodePtr gpFirstSmsOnScreen;
 
 button gLastPreddedButton;
+
 bool gIsContinuousButtonPress;
+
+//int gRowCursorIndex;
+//int gColumnCursorIndex;
+
+SMS_SUBMIT gInEditSms;
+
+//init all dast, create memory pools
+smsModelInit();
+
+screen_type getCurentScreenType();
+
+button getLastButton();
+bool isContinuousButtonPress();
+void addSmsToDb(void* pSms,const message_type type);
+void removeSmsFromDb(const SmsLinkNodePtr pSms);
+int getSmsSerialNumber(const SmsLinkNodePtr pSms);
+SMS_SUBMIT* getInEditSms();
+
+
+
+
+
 
 
 

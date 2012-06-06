@@ -1,5 +1,19 @@
 #include "TX/tx_api.h"
 
+
+//main will contain ALL callbacks. those callbacks will update some globals (such as the button that been pressed)
+//and will signal the events flag of the relevant thread
+
+button gPressedButton;
+
+void buttonThreadEntry(...)
+{
+	while(true)
+	{
+		//wait for events flagg
+		buttonPressed(gPresedButton);	
+	}
+}
 //TX will call this function after system init
 void tx_application_define(void *first) 
 {
