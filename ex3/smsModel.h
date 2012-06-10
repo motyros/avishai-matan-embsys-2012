@@ -34,29 +34,58 @@ typedef struct _SMS_SUBMIT {
 
 typedef struct
 {
-	SmsLinkPtr 	pNext;
-	SmsLinkPtr 	pPrev;
-	message_type	type;
-	void* 		pSMS;
+	SmsLinkNodePtr 		pNext;
+	SmsLinkNodePtr 		pPrev;
+	message_type		type;
+	void* 				pSMS;
 }SmsLinkNode,*SmsLinkNodePtr;
 
 
 /*
  *
  */
-modelInit();
+void modelInit();
 
-screen_type getCurentScreenType();
+/*
+ * get the enum of the current been displayed screen
+ */
+screen_type modelGetCurentScreenType();
 
-button getLastButton();
-bool isContinuousButtonPress();
-void addSmsToDb(void* pSms,const message_type type);
-void removeSmsFromDb(const SmsLinkNodePtr pSms);
-int getSmsSerialNumber(const SmsLinkNodePtr pSms);
-SMS_SUBMIT* getInEditSms();
+/*
+ * get the last pressed button
+ */
+button modelGetLastButton();
+
+/*
+ * get true if time since last button pressed is short
+ * to be considered as continuous button press
+ */
+bool modelIsContinuousButtonPress();
+
+/*
+ * add an sms to sms db
+ */
+void modelAddSmsToDb(void* pSms,const message_type type);
+
+/*
+ * remove sms from sms db
+ */
+void modelRemoveSmsFromDb(const SmsLinkNodePtr pSms);
+
+/*
+ * get the serial number of an sms
+ */
+int modelGetSmsSerialNumber(const SmsLinkNodePtr pSms);
+
+/*
+ * get the sms that been edit right now
+ */
+SMS_SUBMIT* modelGetInEditSms();
 
 
+SmsLinkNodePtr modelGetFirstSmsOnScreen();
 
+SmsLinkNodePtr modelGetSelectedSms();
 #endif
 
 

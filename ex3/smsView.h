@@ -4,6 +4,7 @@
 #include "TX/tx_api.h"
 #include "common_defs.h"
 
+UINT init();
 /*
  * set the refresh flag which indicate that the view should
  * refresh the whole screen.

@@ -1,10 +1,11 @@
 #include "smsModel.h"
+#include "embsys_sms_protocol.h"
 
 typedef struct
 {
-	SmsLinkPtr 	pHead;
-	SmsLinkPtr 	pTail;
-	int 		size;
+	SmsLinkNodePtr 	pHead;
+	SmsLinkNodePtr 	pTail;
+	int 			size;
 }SmsLinkedList;
 
 SmsLinkedList gSmsDb;
