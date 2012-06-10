@@ -1,12 +1,9 @@
+#ifndef __SMS_MODEL_H__
+#define __SMS_MODEL_H__
+
 /* list off all sms (incomming and outgoing */
 
-typedef enum
-{
-    MESSAGE_LISTING_SCREEN	= 0,
-    MESSAGE_DISPLAY_SCREEN	= 1,
-    MESSAGE_EDIT_SCREEN		= 2,
-    MESSAGE_NUMBER_SCREEN	= 3,
-} screen_type;
+#include "common_defs.h"
 
 typedef enum
 {
@@ -35,8 +32,6 @@ typedef struct _SMS_SUBMIT {
 }SMS_SUBMIT;
 */
 
-#define
-
 typedef struct
 {
 	SmsLinkPtr 	pNext;
@@ -45,32 +40,11 @@ typedef struct
 	void* 		pSMS;
 }SmsLinkNode,*SmsLinkNodePtr;
 
-typedef struct
-{
-	SmsLinkPtr 	pHead;
-	SmsLinkPtr 	pTail;
-	int 		size;
-}SmsLinkedList;
 
-SmsLinkedList gSmsDb;
-
-screen_type gCurrentScreen;
-
-SmsLinkNodePtr gpSelectedSms;
-
-SmsLinkNodePtr gpFirstSmsOnScreen;
-
-button gLastPreddedButton;
-
-bool gIsContinuousButtonPress;
-
-//int gRowCursorIndex;
-//int gColumnCursorIndex;
-
-SMS_SUBMIT gInEditSms;
-
-//init all dast, create memory pools
-smsModelInit();
+/*
+ *
+ */
+modelInit();
 
 screen_type getCurentScreenType();
 
@@ -80,6 +54,10 @@ void addSmsToDb(void* pSms,const message_type type);
 void removeSmsFromDb(const SmsLinkNodePtr pSms);
 int getSmsSerialNumber(const SmsLinkNodePtr pSms);
 SMS_SUBMIT* getInEditSms();
+
+
+
+#endif
 
 
 

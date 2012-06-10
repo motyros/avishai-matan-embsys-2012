@@ -26,6 +26,14 @@ typedef enum
 
 } result_t;
 
+typedef enum
+{
+    MESSAGE_LISTING_SCREEN	= 0,
+    MESSAGE_DISPLAY_SCREEN	= 1,
+    MESSAGE_EDIT_SCREEN		= 2,
+    MESSAGE_NUMBER_SCREEN	= 3,
+} screen_type;
+
 #ifdef DBG
 #define DBG_ASSERT(cond) if (!(cond)) _ASM("BRK_S"); _nop(); _nop();
 #else
