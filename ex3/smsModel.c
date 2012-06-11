@@ -1,4 +1,5 @@
 #include "smsModel.h"
+#include "embsys_sms_protocol.h"
 
 typedef struct
 {
