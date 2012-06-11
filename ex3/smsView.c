@@ -5,15 +5,15 @@
 
 #define SCREEN_HEIGHT 18
 #define SCREEN_WIDTH 12
-#define BUTTOM
+#define BOTTOM
 
 TX_EVENT_FLAGS_GROUP gGuiRefershEventFlags;
 TX_EVENT_FLAGS_GROUP gLcdIdleEventFlags;
 
-#define MESSAGE_LISTING_SCREEN_BUTTOM 	"New   Delete"
-#define MESSAGE_DISPLAY_SCREEN_BUTTOM 	"Back  Delete"
-#define MESSAGE_EDIT_SCREEN_BUTTOM    	"Back  Delete"
-#define MESSAGE_NUMBER_SCREEN_BUTTOM	"Back        "
+#define MESSAGE_LISTING_SCREEN_BOTTOM 	"New   Delete"
+#define MESSAGE_DISPLAY_SCREEN_BOTTOM 	"Back  Delete"
+#define MESSAGE_EDIT_SCREEN_BOTTOM    	"Back  Delete"
+#define MESSAGE_NUMBER_SCREEN_BOTTOM	"Back        "
 #define BLANK_LINE						"            "
 
 #define INT_TO_CH(n) ((n) + '0')
