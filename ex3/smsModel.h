@@ -4,7 +4,12 @@
 /* list off all sms (incomming and outgoing */
 
 #include "common_defs.h"
+#include "TX/tx_api.h"
+#include "input_panel/input_panel.h"
+#include "embsys_sms_protocol.h"
 
+#define MAX_NUM_SMS 100
+#define SMS_BLOCK_SIZE sizeof(SMS_SUBMIT)
 typedef enum
 {
     INCOMMING_MESSAGE		= 0,
@@ -34,17 +39,17 @@ typedef struct _SMS_SUBMIT {
 
 typedef struct
 {
-	SmsLinkNodePtr 		pNext;
-	SmsLinkNodePtr 		pPrev;
-	message_type		type;
-	void* 				pSMS;
+	SmsLinkNodePtr	pNext;
+	SmsLinkNodePtr	pPrev;
+	message_type	type;
+	void*			pSMS;
 }SmsLinkNode,*SmsLinkNodePtr;
 
 
 /*
- *
+ * initialize the structs
  */
-void modelInit();
+UINT modelInit();
 
 /*
  * get the enum of the current been displayed screen
@@ -65,12 +70,12 @@ bool modelIsContinuousButtonPress();
 /*
  * add an sms to sms db
  */
-void modelAddSmsToDb(void* pSms,const message_type type);
+UINT modelAddSmsToDb(void* pSms,const message_type type);
 
 /*
  * remove sms from sms db
  */
-void modelRemoveSmsFromDb(const SmsLinkNodePtr pSms);
+UINT modelRemoveSmsFromDb(const SmsLinkNodePtr pSms);
 
 /*
  * get the serial number of an sms

@@ -14,15 +14,24 @@ network.o: network/network.c network/network.h common_defs.h
 
 timer.o: timer/timer.c timer/timer.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
+	
+smsController.o: smsController.c smsController.h TX/tx_api.h common_defs.h input_panel/input_panel.h
+	mcc -c -a6 -g -w3 $< -o $@
+	
+smsModel.o: smsModel.c smsModel.h common_defs.h TX/tx_api.h embsys_sms_protocol.h
+	mcc -c -a6 -g -w3 $< -o $@
+
+smsView.o: smsView.c smsView.h TX/tx_api.h common_defs.h
+	mcc -c -a6 -g -w3 $< -o $@
 
 ivt.o: ivt.s
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o: main.c TX/tx_api.h common_defs.h 
+main.o: main.c TX/tx_api.h common_defs.h smsController.h
 	mcc -c -a6 -g -w3 $< -o $@
 
 a.out: main.o input_panel.o LCD.o network.o timer.o ivt.o device.svr3
-	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-C,output=device.map
+	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
 
 tar:
 	tar --exclude=".*" -cvjf avishl02_matanp01 flash input_panel LCD network timer ivt.s common_defs.h README makefile

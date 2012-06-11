@@ -1,7 +1,7 @@
 #ifndef __SMS_CONTROLLER_H__
 #define __SMS_CONTROLLER_H__
 
-#include "smsController.h"
+
 #include "TX/tx_api.h"
 #include "common_defs.h"
 #include "input_panel/input_panel.h"
