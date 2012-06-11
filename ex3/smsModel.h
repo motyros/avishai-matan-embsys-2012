@@ -37,6 +37,7 @@ typedef struct _SMS_SUBMIT {
 }SMS_SUBMIT;
 */
 
+/*this struct is recursive */
 typedef struct
 {
 	SmsLinkNodePtr	pNext;
