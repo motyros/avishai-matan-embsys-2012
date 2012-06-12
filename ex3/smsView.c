@@ -19,9 +19,20 @@ TX_EVENT_FLAGS_GROUP gLcdIdleEventFlags;
 
 #define INT_TO_CH(n) ((n) + '0')
 
+TX_THREAD gGuiThread;
 //we want to refresh the screen at the first time
 bool gViewRefreshScreen = true;
 
+void GuiThreadMainLoopFunc(ULONG v)
+{
+	INT actualFlag;
+
+	while(true)
+	{
+		viewRefresh();
+		tx_event_flags_get(&gGuiRefershEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+	}
+}
 
 UINT init()
 {
@@ -43,8 +54,15 @@ UINT init()
 			break;
 		}
 
-		//create GUI thread
+		//TODO create GUI thread
+		/*UINT tx_thread_create(TX_THREAD *thread_ptr,
+		CHAR *name_ptr, VOID (*entry_function)(ULONG),
+		ULONG entry_input, VOID *stack_start,
+		ULONG stack_size, UINT priority,
+		UINT preempt_threshold, ULONG time_slice,
+		UINT auto_start)*/
 
+		status = tx_thread_create(&gGuiThread,"Gui Thread",)
 
 	}while(false);
 
@@ -269,6 +287,13 @@ void renderMessageEditScreen()
 		memset(line,' ',SCREEN_WIDTH);
 		memcpy(line,pMessage->data + SCREEN_WIDTH*i,lastRowLen);
 		blockingSetLcdLine(i,false,line,SCREEN_WIDTH);
+
+		//if the last button was "delete char" an we moved to the last position at the previouse
+		//line, we should clear the next line from the one char it still has
+		if (lastRowLen == SCREEN_WIDTH && modelGetLastButton() == BUTTON_NUMBER_SIGN)
+		{
+			blockingSetLcdLine(i+1,false,BLANK_LINE,SCREEN_WIDTH);
+		}
 	}
 }
 
