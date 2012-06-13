@@ -86,9 +86,15 @@ void modelSetCurrentScreenType(screen_type screen)
 {
 	gCurrentScreen = screen;
 }
+
 button modelGetLastButton()
 {
-        return gLastPreddedButton;
+	return gLastPreddedButton;
+}
+
+void modelSetLastButton(const button b)
+{
+	gLastPreddedButton = b;
 }
 
 void modelSetIsContinuousButtonPress(bool status)
@@ -100,6 +106,15 @@ bool modelIsContinuousButtonPress()
 {
 	return gIsContinuousButtonPress;
 }
+
+//updates the head and tail to point to each other
+//to have a cyclic list
+void updateHeadAndTailCyclic()
+{
+    gSmsDb.pHead->pPrev = gSmsDb.pTail;
+    gSmsDb.pTail->pNext = gSmsDb.pHead;
+}
+
 
 UINT modelAddSmsToDb(void* pSms,const message_type type)
 {
@@ -136,27 +151,17 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 
         memcpy(pNewSms->pSMS,pSms,SMS_BLOCK_SIZE);
 
-        /*************************************/
-        if (gSmsDb.size == 0)
-        {
-        	gpFirstSmsOnScreen = pNewSms;
-        	gpSelectedSms = pNewSms;
-        }
-        /*************************************/
-
-
         if(gSmsDb.size == 0)
         {
                 DBG_ASSERT(gSmsDb.pHead == NULL);
                 DBG_ASSERT(gSmsDb.pTail == NULL);
 
+                //it is a cyclic list
+                pNewSms->pNext = pNewSms;
+                pNewSms->pPrev = pNewSms;
                 //the first node in the list - the head+tail
                 gSmsDb.pHead = pNewSms;
                 gSmsDb.pTail = pNewSms;
-                gSmsDb.pHead->pPrev = NULL;
-
-                //the tail points to NULL
-                gSmsDb.pTail->pNext = NULL;
         }
         else if(gSmsDb.size == 1)
         {
@@ -167,8 +172,9 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
                 gSmsDb.pHead->pNext = gSmsDb.pTail;
                 gSmsDb.pTail->pPrev = gSmsDb.pHead;
 
-                //the tail points to NULL
-                gSmsDb.pTail->pNext = NULL;
+                //it is a cyclic list
+                updateHeadAndTailCyclic();
+
         }
         else
         {
@@ -177,8 +183,9 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
                 pNewSms->pPrev = gSmsDb.pTail;
                 gSmsDb.pTail = pNewSms;
 
-                //the tail points to NULL
-                gSmsDb.pTail->pNext = NULL;
+                //it is a cyclic list
+                updateHeadAndTailCyclic();
+
         }
 
         //increase the size of the linked list
@@ -222,6 +229,9 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
         {
                 gSmsDb.pHead = pSms->pNext;
                 gSmsDb.pHead->pPrev = NULL;
+
+                //it is a cyclic list
+                updateHeadAndTailCyclic();
         }
 
         //if the node is the tail
@@ -229,6 +239,9 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
         {
                 gSmsDb.pTail = pSms->pPrev;
                 gSmsDb.pTail->pNext = NULL;
+
+                //it is a cyclic list
+                updateHeadAndTailCyclic();
         }
         else
         {
@@ -280,7 +293,29 @@ SmsLinkNodePtr modelGetFirstSmsOnScreen()
         return gpFirstSmsOnScreen;
 }
 
+void modelSetFirstSmsOnScreen(const SmsLinkNodePtr pSms)
+{
+        gpFirstSmsOnScreen = pSms;
+}
+
 SmsLinkNodePtr modelGetSelectedSms()
 {
         return gpSelectedSms;
 }
+
+void modelSetSelectedSms(const SmsLinkNodePtr pSms)
+{
+	gpSelectedSms = pSms;
+}
+
+
+SmsLinkNodePtr modelGetFirstSms()
+{
+	return gSmsDb.pHead;
+}
+
+UINT modelGetSmsDbSize()
+{
+	return gSmsDb.size;
+}
+

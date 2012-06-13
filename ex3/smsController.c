@@ -169,7 +169,7 @@ void handleListingScreen(button b)
 		break;
 	case BUTTON_NUMBER_SIGN: //delete message
 		deleteSmsFromScreen(pFirstSms,pSelectedSms);
-		modelDeleteSmsFromDb(pSelectedSms);
+		modelRemoveSmsFromDb(pSelectedSms);
 		viewSetRefreshScreen();
 		break;
 	case BUTTON_OK: //display message
@@ -196,7 +196,7 @@ void handleDisplayScreen(button b)
 		SmsLinkNodePtr pFirstSms = modelGetFirstSmsOnScreen();
 
 		deleteSmsFromScreen(pFirstSms,pSelectedSms);
-		modelDeleteSmsFromDb(pSelectedSms);
+		modelRemoveSmsFromDb(pSelectedSms);
 		break;
 	default: return;
 	}

@@ -71,13 +71,8 @@ button modelGetLastButton();
 /*
  * set the last pressed button
  */
- void modelSetLastButton(const button);
+ void modelSetLastButton(const button b);
 
-/*
- * get true if time since last button pressed is short
- * to be considered as continuous button press
- */
-bool modelIsContinuousButtonPress();
 
 /*
  * add an sms to sms db
@@ -101,9 +96,11 @@ SMS_SUBMIT* modelGetInEditSms();
 
 
 SmsLinkNodePtr modelGetFirstSmsOnScreen();
+
 void modelSetFirstSmsOnScreen(const SmsLinkNodePtr pSms);
 
 SmsLinkNodePtr modelGetSelectedSms();
+
 void modelSetSelectedSms(const SmsLinkNodePtr pSms);
 
 /*
@@ -115,8 +112,6 @@ void modelSetIsContinuousButtonPress(bool status);
  * get is continuous button press
  */
 bool modelIsContinuousButtonPress();
-
-void modelDeleteSmsFromDb(SmsLinkNodePtr pSms);
 
 UINT modelGetSmsDbSize();
 
