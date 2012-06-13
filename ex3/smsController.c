@@ -16,13 +16,6 @@ CHAR gKeyPadThreadStack[KEY_PAD_THREAD_STACK_SIZE];
 TX_EVENT_FLAGS_GROUP gKeyPadEventFlags;
 button gCurrentButton;
 
-typedef struct
-{
-	const char data[5];
-	const int length;
-	const char number;
-}Button;
-
 const CHAR gButton1[] = {'.',',','?','1'};
 const CHAR gButton2[] = {'a','b','c','2'};
 const CHAR gButton3[] = {'d','e','f','3'};
@@ -38,7 +31,7 @@ int gInEditRecipientIdLen;
 
 void buttonPressedCB(button b)
 {
-
+	//wake up the keyPad thread
 }
 
 void keyPadThreadMainFunc(ULONG v)
@@ -91,10 +84,126 @@ TX_STATUS controllerInit()
 	 */
 
 	modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
-	//TODO set the selected messages and the fist message in line
+
+	modelSetFirstSmsOnScreen(modelGetFirstSms());
+	modelSetSelectedSms(modelGetFirstSms());
+
+	return TX_SUCCESS;
+}
+void deleteSmsFromScreen(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSelectedSms)
+{
+	//we are deleting the first sms in the screen
+	if (viewIsFirstRowSelected())
+	{
+		//if this is the only sms
+		if (modelGetSmsDbSize() == 1)
+		{
+			modelSetFirstSmsOnScreen(NULL);
+		}
+		else
+		{
+			modelSetFirstSmsOnScreen(pFirstSms->pNext);
+		}
+	}
+	else
+	{
+		modelSetFirstSmsOnScreen(pFirstSms->pNext);
+	}
+}
+
+void handleListingScreen(button b)
+{
+	SmsLinkNodePtr pSelectedSms = modelGetSelectedSms();
+	SmsLinkNodePtr pFirstSms = modelGetFirstSmsOnScreen();
+
+	switch (b)
+	{
+	case BUTTON_2: //up
+
+		//there are no messages to display
+		if (pFirstSms == NULL)
+		{
+			return;
+		}
+
+		/* if first row is selected and we are moving up:
+		 * 1. if we have more sms than the screen height, first line remain selected
+		 *    and the first sms will be the predecessor
+		 * 2. if all sms fit the screen, select the last sms
+		 */
+		if (viewIsFirstRowSelected())
+		{
+			if (modelGetSmsDbSize() > viewGetScreenHeight(MESSAGE_LISTING_SCREEN))
+			{
+				modelSetFirstSmsOnScreen(pFirstSms->pPrev);
+			}
+			viewSetRefreshScreen();
+		}
+		modelSetSelectedSms(pSelectedSms->pPrev);
+		break;
+	case BUTTON_8: //down
+		//there are no message to display
+		if (pFirstSms == NULL)
+		{
+			return;
+		}
+		if (viewIsLastRowSelected())
+		{
+			if (modelGetSmsDbSize() > viewGetScreenHeight(MESSAGE_LISTING_SCREEN))
+			{
+				modelSetFirstSmsOnScreen(pFirstSms->pNext);
+			}
+			viewSetRefreshScreen();
+		}
+		modelSetSelectedSms(pSelectedSms->pNext);
+		break;
+
+	case BUTTON_STAR: //enter new message screen
+		//if we don't have room for new sms, don't let write new one
+		if (modelGetSmsDbSize() == MAX_NUM_SMS)
+		{
+			break;
+		}
+		modelSetCurrentScreenType(MESSAGE_EDIT_SCREEN);
+		viewSetRefreshScreen();
+		break;
+	case BUTTON_NUMBER_SIGN: //delete message
+		deleteSmsFromScreen(pFirstSms,pSelectedSms);
+		modelDeleteSmsFromDb(pSelectedSms);
+		viewSetRefreshScreen();
+		break;
+	case BUTTON_OK: //display message
+		modelSetCurrentScreenType(MESSAGE_DISPLAY_SCREEN);
+		viewSetRefreshScreen();
+		break;
+	default: return;
+	}
+
+	//signal the view to refresh itself
+	viewSignal();
 
 }
 
+void handleDisplayScreen(button b)
+{
+	switch (b)
+	{
+	case BUTTON_STAR: //go back to sms listing screen
+		modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
+		break;
+	case BUTTON_NUMBER_SIGN: //delete current sms
+		SmsLinkNodePtr pSelectedSms = modelGetSelectedSms();
+		SmsLinkNodePtr pFirstSms = modelGetFirstSmsOnScreen();
+
+		deleteSmsFromScreen(pFirstSms,pSelectedSms);
+		modelDeleteSmsFromDb(pSelectedSms);
+		break;
+	default: return;
+	}
+
+	viewSetRefreshScreen();
+
+}
 
 //decide what to do according the cuurent screen, current state etc
 void controllerButtonPressed(const button b)
@@ -105,13 +214,13 @@ void controllerButtonPressed(const button b)
 		handleDisplayScreen(b);
 		break;
 	case MESSAGE_EDIT_SCREEN:
-		handleEditScreen(b);
+		//handleEditScreen(b);
 		break;
 	case MESSAGE_LISTING_SCREEN:
 		handleListingScreen(b);
 		break;
 	case MESSAGE_NUMBER_SCREEN:
-		handleNumberScreen(b);
+		//handleNumberScreen(b);
 		break;
 	}
 	modelSetLastButton(b);
@@ -180,7 +289,7 @@ void handleNumberScreen(button but)
 		//cancel the message
 		inEditSms->data_length = 0;
 		//update the gui
-		modelSetCurentScreenType(MESSAGE_LISTING_SCREEN);
+		modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
 		viewSetRefreshScreen();
 		viewSignal();
 		return;
@@ -205,16 +314,15 @@ void handleEditNewChar(const char buttonX[])
 	if(gInEditContinuosNum > 0 || inEditSms->data_length == DATA_MAX_LENGTH)
 	{
 		int numChar = gInEditContinuosNum % ARRAY_CHAR_LEN(buttonX);
-		inEditSms->data[inEditSms.data_length-1] = buttonX[numChar];
+		inEditSms->data[inEditSms->data_length-1] = buttonX[numChar];
 	}
 	else
 	{
-		inEditSms->data[inEditSms.data_length] = buttonX[0];
+		inEditSms->data[inEditSms->data_length] = buttonX[0];
 		inEditSms->data_length++;
 	}
 
 	viewSignal();
-	break;
 }
 
 void handleEditScreen(button but)
@@ -234,14 +342,14 @@ void handleEditScreen(button but)
 		gInEditRecipientIdLen = 0;
 		//clean the recipient_id
 		memset(inEditSms->recipient_id ,' ', ID_MAX_LENGTH);
-		modelSetCurentScreenType(MESSAGE_NUMBER_SCREEN);
+		modelSetCurrentScreenType(MESSAGE_NUMBER_SCREEN);
 		viewSetRefreshScreen();
 		viewSignal();
 		break;
 	case BUTTON_STAR:
 		//reset the message
 		inEditSms->data_length = 0;
-		modelSetCurentScreenType(MESSAGE_LISTING_SCREEN);
+		modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
 		viewSetRefreshScreen();
 		viewSignal();
 		break;

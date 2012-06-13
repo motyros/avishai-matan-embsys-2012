@@ -178,14 +178,10 @@ void setMessageListingLineInfo(SmsLinkNodePtr pSms,int serialNumber,CHAR* pLine)
 
 	SMS_DELIVER* pInSms;
 	SMS_SUBMIT* pOutSms;
-	CHAR* pStartLine = pLine;
 
-	//
-	if (leftDigit != 0)
-	{
-		*pLine++ = INT_TO_CH(leftDigit);
-	}
+	*pLine++ = INT_TO_CH(leftDigit);
 	*pLine++ = INT_TO_CH(rightDigit);
+	*pLine++ = ' ';
 
 	if (pSms->type == INCOMMING_MESSAGE)
 	{
@@ -206,12 +202,6 @@ void setMessageListingLineInfo(SmsLinkNodePtr pSms,int serialNumber,CHAR* pLine)
 		*pLine++ = 'O';
 	}
 
-	i = (int)(pLine-pStartLine);
-
-	while(i++ < SCREEN_WIDTH)
-	{
-		*pLine++ = ' ';
-	}
 }
 
 void renderMessageListingScreen()

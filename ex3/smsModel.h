@@ -14,6 +14,7 @@ typedef enum
     OUTGOING_MESSAGE		= 1,	
 } message_type;
 
+#define MAX_NUM_SMS (100)
 /*
 typedef struct _SMS_DELIVER {
 
@@ -100,8 +101,10 @@ SMS_SUBMIT* modelGetInEditSms();
 
 
 SmsLinkNodePtr modelGetFirstSmsOnScreen();
+void modelSetFirstSmsOnScreen(const SmsLinkNodePtr pSms);
 
 SmsLinkNodePtr modelGetSelectedSms();
+void modelSetSelectedSms(const SmsLinkNodePtr pSms);
 
 /*
  * set the if next button press will be considered as continuous
@@ -112,6 +115,12 @@ void modelSetIsContinuousButtonPress(bool status);
  * get is continuous button press
  */
 bool modelIsContinuousButtonPress();
+
+void modelDeleteSmsFromDb(SmsLinkNodePtr pSms);
+
+UINT modelGetSmsDbSize();
+
+SmsLinkNodePtr modelGetFirstSms();
 
 #endif
 

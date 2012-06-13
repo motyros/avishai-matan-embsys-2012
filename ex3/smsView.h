@@ -26,5 +26,9 @@ void viewSetGuiThreadEventsFlag(TX_EVENT_FLAGS_GROUP *pGuiThreadEventsFlag);
  */
 void viewSignal();
 
+bool viewIsFirstRowSelected();
+bool viewIsLastRowSelected();
+
+
 #endif
 

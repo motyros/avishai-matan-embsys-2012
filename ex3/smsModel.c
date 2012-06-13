@@ -1,7 +1,7 @@
 #include "smsModel.h"
 #include "embsys_sms_protocol.h"
 
-#define MAX_NUM_SMS (100)
+
 #define SMS_BLOCK_SIZE (sizeof(SMS_DELIVER))
 #define BLOCK_OVERHEAD (sizeof(void*))
 
