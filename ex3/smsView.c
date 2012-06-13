@@ -4,6 +4,7 @@
 #include "embsys_sms_protocol.h"
 #include <string.h>
 #include "LCD/LCD.h"
+#include "common_defs.h"
 
 #define SCREEN_HEIGHT 18
 #define SCREEN_WIDTH 12
@@ -30,7 +31,7 @@ TX_THREAD gGuiThread;
 //we want to refresh the screen at the first time
 bool gViewRefreshScreen = true;
 
-
+INT gSelectedLineIndex = 0;
 /*
  * FWD declaration of functions
  */
@@ -241,6 +242,11 @@ void renderMessageListingScreen()
 
 				pMessage = pMessage->pNext;
 			}
+
+			if (pMessage==pSelectedMessage)
+			{
+				gSelectedLineIndex = i;
+			}
 		}
 
 		//print the bottom of the screen
@@ -263,7 +269,7 @@ void renderMessageListingScreen()
 		//up button - print the message after the selected message
 		if (modelGetLastButton() == BUTTON_2)
 		{
-
+			gSelectedLineIndex--;
 			setMessageListingLineInfo(pMessage->pNext,smsSerialNumber+i+1,line);
 			blockingSetLcdLine(i+1,false,line,SCREEN_WIDTH);
 
@@ -271,6 +277,7 @@ void renderMessageListingScreen()
 		//down button - print the message before the selected message
 		else
 		{
+			gSelectedLineIndex++;
 			setMessageListingLineInfo(pMessage->pPrev,smsSerialNumber+i-1,line);
 			blockingSetLcdLine(i-1,false,line,SCREEN_WIDTH);
 		}
@@ -296,6 +303,8 @@ void renderMessageEditScreen()
 		}
 		//display the bottom line
 		blockingSetLcdLine(SCREEN_HEIGHT-1,true,MESSAGE_EDIT_SCREEN_BOTTOM,SCREEN_WIDTH);
+
+		gViewRefreshScreen = false;
 	}
 	else
 	{
@@ -347,6 +356,8 @@ void renderMessageNumberScreen()
 			blockingSetLcdLine(i,false,BLANK_LINE,SCREEN_WIDTH);
 		}
 		blockingSetLcdLine(SCREEN_HEIGHT-1,true,MESSAGE_NUMBER_SCREEN_BOTTOM,SCREEN_WIDTH);
+
+		gViewRefreshScreen = false;
 	}
 }
 
@@ -419,7 +430,7 @@ void renderMessageDisplayScreen()
 		//print the
 		blockingSetLcdLine(SCREEN_HEIGHT-1,true,MESSAGE_DISPLAY_SCREEN_BOTTOM,SCREEN_WIDTH);
 
-
+		gViewRefreshScreen = false;
 	}
 }
 
@@ -443,5 +454,15 @@ void viewRefresh()
 			break;
 
 	}
+}
+
+bool viewIsFirstRowSelected()
+{
+	return gSelectedLineIndex==0;
+}
+
+bool viewIsLastRowSelected()
+{
+	return gSelectedLineIndex==(SCREEN_HEIGHT-1);
 }
 

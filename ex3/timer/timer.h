@@ -10,6 +10,9 @@
 
 #include "../common_defs.h"
 
+#define CPU_FREQ 50*1000000
+#define CYCLES_IN_MS (CPU_FREQ/1000)
+
 /**********************************************************************
  *
  * Function:    timer0_register

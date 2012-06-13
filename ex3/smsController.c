@@ -3,11 +3,17 @@
 #include "smsController.h"
 #include "smsView.h"
 #include "smsModel.h"
-
+#include "timer/timer.h"
 
 #define KEY_PAD_THREAD_STACK_SIZE (1024)
 #define KEY_PAD_PRIORITY (1)
 #define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
+
+
+//**** FWD Declaration ****\\
+
+void handleNumberScreen(button but);
+void handleEditScreen(button but);
 
 TX_THREAD gKeyPadThread;
 CHAR gKeyPadThreadStack[KEY_PAD_THREAD_STACK_SIZE];
@@ -15,6 +21,8 @@ CHAR gKeyPadThreadStack[KEY_PAD_THREAD_STACK_SIZE];
 
 TX_EVENT_FLAGS_GROUP gKeyPadEventFlags;
 button gCurrentButton;
+
+TX_TIMER gContinuousButtonPressTimer;
 
 const CHAR gButton1[] = {'.',',','?','1'};
 const CHAR gButton2[] = {'a','b','c','2'};
@@ -29,17 +37,29 @@ const CHAR gButton0[] = {' ','0'};
 int gInEditContinuosNum;
 int gInEditRecipientIdLen;
 
+button gPressedButton;
+
 void buttonPressedCB(button b)
 {
+	gPressedButton = b;
 	//wake up the keyPad thread
+	tx_event_flags_set(&gKeyPadEventFlags,1,TX_OR);
 }
 
 void keyPadThreadMainFunc(ULONG v)
 {
+	ULONG actualFlag;
+
 	while(true)
 	{
-		//wait for event flags
+		tx_event_flags_get(&gKeyPadEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+		controllerButtonPressed(gPressedButton);
 	}
+}
+
+void disableContinuousButtonPress(ULONG v)
+{
+	modelSetIsContinuousButtonPress(false);
 }
 
 TX_STATUS controllerInit()
@@ -66,7 +86,20 @@ TX_STATUS controllerInit()
 								TX_NO_TIME_SLICE, TX_AUTO_START
 								);
 
+	status = tx_timer_create(	&gContinuousButtonPressTimer,
+								"Continuouse Button Press Timer",
+								disableContinuousButtonPress,
+								0,
+								500/**CYCLES_IN_MS*/,
+								0,
+								TX_NO_ACTIVATE);
+
+
+	status = tx_event_flags_create(&gKeyPadEventFlags,"Keypad Event Flags");
+
+	//TODO handle status != TX_SUCCESS
 	ip_init(buttonPressedCB);
+	ip_enable();
 	/*
 	 * init network: init a full struct for the transmit_buffer and recieve_buffer,
 	 * 				call backs for the network: transmitted_cb, received_cb, dropped_cb, error_cb
@@ -214,18 +247,21 @@ void controllerButtonPressed(const button b)
 		handleDisplayScreen(b);
 		break;
 	case MESSAGE_EDIT_SCREEN:
-		//handleEditScreen(b);
+		handleEditScreen(b);
 		break;
 	case MESSAGE_LISTING_SCREEN:
 		handleListingScreen(b);
 		break;
 	case MESSAGE_NUMBER_SCREEN:
-		//handleNumberScreen(b);
+		handleNumberScreen(b);
 		break;
 	}
+
 	modelSetLastButton(b);
 	modelSetIsContinuousButtonPress(true);
-	//TODO - create a timer that will set this var to false
+	TX_STATUS status = tx_timer_activate(&gContinuousButtonPressTimer);
+	int a;
+	a++;
 }
 
 CHAR getNumberFromButton(button but)

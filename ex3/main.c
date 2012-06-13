@@ -37,8 +37,8 @@ void tx_application_define(void *first)
 	status = viewInit();
 	DBG_ASSERT(status == TX_SUCCESS);
 
-	//status = controllerInit();
-	//DBG_ASSERT(status == TX_SUCCESS);
+	status = controllerInit();
+	DBG_ASSERT(status == TX_SUCCESS);
 
 	arm_tx_timer(5);
 
