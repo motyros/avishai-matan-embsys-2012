@@ -38,5 +38,6 @@ result_t timer0_register(uint32_t interval, bool one_shot, void(*timer_cb)(void)
  ***********************************************************************/
 result_t timer1_register(uint32_t interval, bool one_shot, void(*timer_cb)(void));
 
+void arm_tx_timer(uint32_t interval);
 
 #endif /* TIMER_H_ */

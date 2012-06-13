@@ -4,7 +4,7 @@
 #include "TX/tx_api.h"
 #include "common_defs.h"
 
-UINT init();
+TX_STATUS viewInit();
 /*
  * set the refresh flag which indicate that the view should
  * refresh the whole screen.
@@ -25,11 +25,6 @@ void viewSetGuiThreadEventsFlag(TX_EVENT_FLAGS_GROUP *pGuiThreadEventsFlag);
  * signal the events flag to wake up the gui thread for refreshing the screen
  */
 void viewSignal();
-
-/*
- * instruct the view to refresh the screen in order to display new
- */
-void viewRefresh();
 
 #endif
 

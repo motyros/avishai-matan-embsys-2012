@@ -8,8 +8,6 @@
 #include "input_panel/input_panel.h"
 #include "embsys_sms_protocol.h"
 
-#define MAX_NUM_SMS 100
-#define SMS_BLOCK_SIZE sizeof(SMS_SUBMIT)
 typedef enum
 {
     INCOMMING_MESSAGE		= 0,
@@ -60,6 +58,11 @@ UINT modelInit();
 screen_type modelGetCurentScreenType();
 
 /*
+ * set the enum of the current been displayed screen
+ */
+void modelSetCurrentScreenType(screen_type screen);
+
+/*
  * get the last pressed button
  */
 button modelGetLastButton();
@@ -94,6 +97,17 @@ SMS_SUBMIT* modelGetInEditSms();
 SmsLinkNodePtr modelGetFirstSmsOnScreen();
 
 SmsLinkNodePtr modelGetSelectedSms();
+
+/*
+ * set the if next button press will be considered as continuous
+ */
+void modelSetIsContinuousButtonPress(bool status);
+
+/*
+ * get is continuous button press
+ */
+bool modelIsContinuousButtonPress();
+
 #endif
 
 

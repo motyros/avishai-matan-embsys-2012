@@ -27,10 +27,10 @@ smsView.o: smsView.c smsView.h TX/tx_api.h common_defs.h
 ivt.o: ivt.s
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o: main.c TX/tx_api.h common_defs.h smsController.h
+main.o: main.c TX/tx_api.h common_defs.h smsController.h timer/timer.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-a.out: main.o input_panel.o LCD.o network.o timer.o ivt.o device.svr3
+a.out: main.o input_panel.o LCD.o network.o timer.o smsModel.o smsView.o ivt.o device.svr3
 	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
 
 tar:

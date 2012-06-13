@@ -34,6 +34,8 @@ typedef enum
     MESSAGE_NUMBER_SCREEN	= 3,
 } screen_type;
 
+typedef unsigned int TX_STATUS;
+
 #ifdef DBG
 #define DBG_ASSERT(cond) if (!(cond)) _ASM("BRK_S"); _nop(); _nop();
 #else

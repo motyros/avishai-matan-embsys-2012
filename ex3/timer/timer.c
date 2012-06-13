@@ -114,3 +114,20 @@ result_t timer1_register(uint32_t interval, bool one_shot, void(*timer_cb)(void)
 {
 	return registerTimer(1,interval,one_shot,timer_cb);
 }
+
+void arm_tx_timer(uint32_t interval)
+{
+	Timer t;
+
+	t.control.data = 0;
+
+	t.control.bits.IE = 1;
+	t.control.bits.IP = 0;
+	t.control.bits.W = 0;
+
+	_sr(0,TIMER0_COUNT_ADDR);
+	_sr(CYCLES_IN_MS * interval,TIMER0_LIMIT_ADDR);
+	_sr(t.control.data,TIMER0_CONTROL_ADDR);
+
+
+}

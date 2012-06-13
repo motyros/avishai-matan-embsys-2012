@@ -7,6 +7,11 @@
 #include "input_panel/input_panel.h"
 
 /*
+ * init controller component
+ */
+TX_STATUS controllerInit();
+
+/*
  * let the controller know that button pressed
  */
 void controllerButtonPressed(const button b);

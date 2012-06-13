@@ -3,6 +3,7 @@
 #include "TX/tx_api.h"
 #include "embsys_sms_protocol.h"
 #include <string.h>
+#include "LCD/LCD.h"
 
 #define SCREEN_HEIGHT 18
 #define SCREEN_WIDTH 12
@@ -19,13 +20,30 @@ TX_EVENT_FLAGS_GROUP gLcdIdleEventFlags;
 
 #define INT_TO_CH(n) ((n) + '0')
 
+#define GUI_THREAD_STACK_SIZE 1024
+#define GUI_THREAD_PRIORITY 1
+
+char gGuiThreadStack[GUI_THREAD_STACK_SIZE];
+
 TX_THREAD gGuiThread;
+
 //we want to refresh the screen at the first time
 bool gViewRefreshScreen = true;
 
-void GuiThreadMainLoopFunc(ULONG v)
+
+/*
+ * FWD declaration of functions
+ */
+void viewRefresh();
+void lcdDone();
+
+/*
+ * this is the gui main loop. basically the thread sleeps until the LCD need to
+ * be refreshed
+ */
+void guiThreadMainLoopFunc(ULONG v)
 {
-	INT actualFlag;
+	ULONG actualFlag;
 
 	while(true)
 	{
@@ -34,13 +52,27 @@ void GuiThreadMainLoopFunc(ULONG v)
 	}
 }
 
-UINT init()
+
+
+/*
+ * initiation of the view
+ */
+UINT viewInit()
 {
 	UINT status;
+	result_t apiStatus;
 
 	do
 	{
-		status = tx_event_flags_create(&gGuiEventFlags,"Gui Event Flags");
+		apiStatus = lcd_init(lcdDone);
+
+		if (apiStatus != OPERATION_SUCCESS)
+		{
+			status = TX_PTR_ERROR;
+			break;
+		}
+
+		status = tx_event_flags_create(&gGuiRefershEventFlags,"Gui Event Flags");
 
 		if (status != TX_SUCCESS)
 		{
@@ -54,15 +86,17 @@ UINT init()
 			break;
 		}
 
-		//TODO create GUI thread
-		/*UINT tx_thread_create(TX_THREAD *thread_ptr,
-		CHAR *name_ptr, VOID (*entry_function)(ULONG),
-		ULONG entry_input, VOID *stack_start,
-		ULONG stack_size, UINT priority,
-		UINT preempt_threshold, ULONG time_slice,
-		UINT auto_start)*/
+		status = tx_thread_create(	&gGuiThread,
+									"Gui Thread",
+									guiThreadMainLoopFunc,
+									0,
+									gGuiThreadStack,
+									GUI_THREAD_STACK_SIZE,
+									GUI_THREAD_PRIORITY,
+									GUI_THREAD_PRIORITY,
+									TX_NO_TIME_SLICE, TX_AUTO_START
+									);
 
-		status = tx_thread_create(&gGuiThread,"Gui Thread",)
 
 	}while(false);
 
@@ -72,9 +106,19 @@ UINT init()
 
 void deinit()
 {
-	tx_event_flags_delete(&gGuiEventFlags);
+	tx_event_flags_delete(&gGuiRefershEventFlags);
 	tx_event_flags_delete(&gLcdIdleEventFlags);
+	tx_thread_delete(&gGuiThread);
 
+}
+
+/*
+ * callback when LCD operation done
+ */
+void lcdDone()
+{
+	//signal the thread that operation done
+	tx_event_flags_set(&gLcdIdleEventFlags,1,TX_OR);
 }
 
 void viewSetRefreshScreen()
@@ -91,7 +135,6 @@ int viewGetScreenHeight(const screen_type screen)
 		case MESSAGE_EDIT_SCREEN:
 		case MESSAGE_NUMBER_SCREEN:
 			return SCREEN_HEIGHT-1;
-			break;
 		case MESSAGE_DISPLAY_SCREEN:
 			return  SCREEN_HEIGHT- 3;
 	}
@@ -108,10 +151,7 @@ void viewSetGuiThreadEventsFlag(TX_EVENT_FLAGS_GROUP *pGuiThreadEventsFlag)
 }
 */
 
-void lcdDone()
-{
-	tx_event_flags_set(&gLcdIdleEventFlags,1,TX_OR);
-}
+
 void viewSignal()
 {
 	tx_event_flags_set(&gGuiRefershEventFlags,1,TX_OR);
@@ -135,7 +175,7 @@ void setMessageListingLineInfo(SmsLinkNodePtr pSms,int serialNumber,CHAR* pLine)
 	int i = 0;
 	int leftDigit = serialNumber/10;
 	int rightDigit = serialNumber%10;
-	char* p;
+
 	SMS_DELIVER* pInSms;
 	SMS_SUBMIT* pOutSms;
 	CHAR* pStartLine = pLine;
@@ -209,7 +249,7 @@ void renderMessageListingScreen()
 				//print the line
 				blockingSetLcdLine(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
 
-				pMesaage = pMessage->pNext;
+				pMessage = pMessage->pNext;
 			}
 		}
 
@@ -395,7 +435,7 @@ void renderMessageDisplayScreen()
 
 void viewRefresh()
 {
-	screen_type currentScreen = getCurentScreenType();
+	screen_type currentScreen = modelGetCurentScreenType();
 	//according the current screen, refresh and current operation refresh the display
 	switch(currentScreen)
 	{
