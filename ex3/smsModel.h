@@ -68,6 +68,11 @@ void modelSetCurrentScreenType(screen_type screen);
 button modelGetLastButton();
 
 /*
+ * set the last pressed button
+ */
+ void modelSetLastButton(const button);
+
+/*
  * get true if time since last button pressed is short
  * to be considered as continuous button press
  */

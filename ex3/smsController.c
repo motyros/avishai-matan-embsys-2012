@@ -5,8 +5,9 @@
 #include "smsModel.h"
 
 
-#define KEY_PAD_THREAD_STACK_SIZE 1024
-#define KEY_PAD_PRIORITY 1
+#define KEY_PAD_THREAD_STACK_SIZE (1024)
+#define KEY_PAD_PRIORITY (1)
+#define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
 
 TX_THREAD gKeyPadThread;
 CHAR gKeyPadThreadStack[KEY_PAD_THREAD_STACK_SIZE];
@@ -14,6 +15,26 @@ CHAR gKeyPadThreadStack[KEY_PAD_THREAD_STACK_SIZE];
 
 TX_EVENT_FLAGS_GROUP gKeyPadEventFlags;
 button gCurrentButton;
+
+typedef struct
+{
+	const char data[5];
+	const int length;
+	const char number;
+}Button;
+
+const CHAR gButton1[] = {'.',',','?','1'};
+const CHAR gButton2[] = {'a','b','c','2'};
+const CHAR gButton3[] = {'d','e','f','3'};
+const CHAR gButton4[] = {'g','h','i','4'};
+const CHAR gButton5[] = {'j','k','l','5'};
+const CHAR gButton6[] = {'m','n','o','6'};
+const CHAR gButton7[] = {'p','q','r','s','7'};
+const CHAR gButton8[] = {'t','u','v','8'};
+const CHAR gButton9[] = {'w','x','y','z','9'};
+const CHAR gButton0[] = {' ','0'};
+int gInEditContinuosNum;
+int gInEditRecipientIdLen;
 
 void buttonPressedCB(button b)
 {
@@ -30,6 +51,8 @@ void keyPadThreadMainFunc(ULONG v)
 
 TX_STATUS controllerInit()
 {
+	gInEditRecipientIdLen = 0;
+	gInEditContinuosNum = 0;
 	/* create three threads
 	 *
 	 * 1. will listed to the keypad
@@ -91,7 +114,177 @@ void controllerButtonPressed(const button b)
 		handleNumberScreen(b);
 		break;
 	}
+	modelSetLastButton(b);
+	modelSetIsContinuousButtonPress(true);
+	//TODO - create a timer that will set this var to false
 }
+
+CHAR getNumberFromButton(button but)
+{
+	int counter = 0;
+	while (but != 0)
+	{
+		but = but >> 1;
+		counter++;
+	}
+
+	return '0' + (counter-1)%11;
+
+//	switch (but)
+//	{
+//	case BUTTON_1:
+//		retun;
+//		break;
+//	case BUTTON_2:
+//		handleEditNewChar(gButton2);
+//		break;
+//	case BUTTON_3:
+//		handleEditNewChar(gButton3);
+//		break;
+//	case BUTTON_4:
+//		handleEditNewChar(gButton4);
+//		break;
+//	case BUTTON_5:
+//		handleEditNewChar(gButton5);
+//		break;
+//	case BUTTON_6:
+//		handleEditNewChar(gButton6);
+//		break;
+//	case BUTTON_7:
+//		handleEditNewChar(gButton7);
+//		break;
+//	case BUTTON_8:
+//		handleEditNewChar(gButton8);
+//		break;
+//	case BUTTON_9:
+//		handleEditNewChar(gButton9);
+//		break;
+//	case BUTTON_0:
+//		handleEditNewChar(gButton0);
+//		break;
+//	}
+
+}
+
+
+void handleNumberScreen(button but)
+{
+	SMS_SUBMIT* inEditSms = modelGetInEditSms();
+
+	switch (but)
+	{
+	case BUTTON_OK:
+		//TODO: send the sms with network
+		return;
+	case BUTTON_STAR:
+		//cancel the message
+		inEditSms->data_length = 0;
+		//update the gui
+		modelSetCurentScreenType(MESSAGE_LISTING_SCREEN);
+		viewSetRefreshScreen();
+		viewSignal();
+		return;
+	case BUTTON_NUMBER_SIGN:
+		return;
+	}
+
+	if(gInEditRecipientIdLen == ID_MAX_LENGTH)
+	{
+		inEditSms->recipient_id[gInEditRecipientIdLen-1] = getNumberFromButton(but);
+	}
+	else
+	{
+		inEditSms->recipient_id[gInEditRecipientIdLen] = getNumberFromButton(but);
+		gInEditRecipientIdLen++;
+	}
+}
+
+void handleEditNewChar(const char buttonX[])
+{
+	SMS_SUBMIT* inEditSms = modelGetInEditSms();
+	if(gInEditContinuosNum > 0 || inEditSms->data_length == DATA_MAX_LENGTH)
+	{
+		int numChar = gInEditContinuosNum % ARRAY_CHAR_LEN(buttonX);
+		inEditSms->data[inEditSms.data_length-1] = buttonX[numChar];
+	}
+	else
+	{
+		inEditSms->data[inEditSms.data_length] = buttonX[0];
+		inEditSms->data_length++;
+	}
+
+	viewSignal();
+	break;
+}
+
+void handleEditScreen(button but)
+{
+	if(but!=modelGetLastButton() || !modelIsContinuousButtonPress())
+	{
+		gInEditContinuosNum = 0;
+	}
+	else
+	{
+		gInEditContinuosNum++;
+	}
+	SMS_SUBMIT* inEditSms = modelGetInEditSms();
+	switch (but)
+	{
+	case BUTTON_OK:
+		gInEditRecipientIdLen = 0;
+		//clean the recipient_id
+		memset(inEditSms->recipient_id ,' ', ID_MAX_LENGTH);
+		modelSetCurentScreenType(MESSAGE_NUMBER_SCREEN);
+		viewSetRefreshScreen();
+		viewSignal();
+		break;
+	case BUTTON_STAR:
+		//reset the message
+		inEditSms->data_length = 0;
+		modelSetCurentScreenType(MESSAGE_LISTING_SCREEN);
+		viewSetRefreshScreen();
+		viewSignal();
+		break;
+	case BUTTON_NUMBER_SIGN:
+		if(inEditSms->data_length > 0)
+		{
+			inEditSms->data_length--;
+		}
+		viewSignal();
+		break;
+	case BUTTON_1:
+		handleEditNewChar(gButton1);
+		break;
+	case BUTTON_2:
+		handleEditNewChar(gButton2);
+		break;
+	case BUTTON_3:
+		handleEditNewChar(gButton3);
+		break;
+	case BUTTON_4:
+		handleEditNewChar(gButton4);
+		break;
+	case BUTTON_5:
+		handleEditNewChar(gButton5);
+		break;
+	case BUTTON_6:
+		handleEditNewChar(gButton6);
+		break;
+	case BUTTON_7:
+		handleEditNewChar(gButton7);
+		break;
+	case BUTTON_8:
+		handleEditNewChar(gButton8);
+		break;
+	case BUTTON_9:
+		handleEditNewChar(gButton9);
+		break;
+	case BUTTON_0:
+		handleEditNewChar(gButton0);
+		break;
+	}
+}
+
 
 //pass the info
 void controllerPacketArrived(const uint8_t* pBuffer,const uint32_t size)
