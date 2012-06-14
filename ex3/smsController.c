@@ -5,6 +5,10 @@
 #include "smsModel.h"
 #include "timer/timer.h"
 
+
+#define KEY_PAD_TIMER_DURATION (500/TX_TICK_MS)
+#define NETWORK_SLEEP_PERIOD (100/TX_TICK_MS)
+
 #define KEY_PAD_THREAD_STACK_SIZE (1024)
 #define KEY_PAD_PRIORITY (1)
 #define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
@@ -90,7 +94,7 @@ TX_STATUS controllerInit()
 								"Continuouse Button Press Timer",
 								disableContinuousButtonPress,
 								0,
-								500/**CYCLES_IN_MS*/,
+								KEY_PAD_TIMER_DURATION,
 								0,
 								TX_NO_ACTIVATE);
 

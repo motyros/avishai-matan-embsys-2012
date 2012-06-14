@@ -36,6 +36,8 @@ typedef enum
 
 typedef unsigned int TX_STATUS;
 
+#define TX_TICK_MS 5
+
 #ifdef DBG
 #define DBG_ASSERT(cond) if (!(cond)) _ASM("BRK_S"); _nop(); _nop();
 #else

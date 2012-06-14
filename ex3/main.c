@@ -40,7 +40,7 @@ void tx_application_define(void *first)
 	status = controllerInit();
 	DBG_ASSERT(status == TX_SUCCESS);
 
-	arm_tx_timer(5);
+	arm_tx_timer(TX_TICK_MS);
 
 	//addMessagesToDB();
 
