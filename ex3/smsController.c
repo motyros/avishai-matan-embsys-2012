@@ -4,6 +4,7 @@
 #include "smsView.h"
 #include "smsModel.h"
 #include "timer/timer.h"
+#include "network/network.h"
 
 
 #define KEY_PAD_TIMER_DURATION (500/TX_TICK_MS)
@@ -19,14 +20,21 @@
 void handleNumberScreen(button but);
 void handleEditScreen(button but);
 
+//**************Threads global variables****************//
 TX_THREAD gKeyPadThread;
 CHAR gKeyPadThreadStack[KEY_PAD_THREAD_STACK_SIZE];
-
-
 TX_EVENT_FLAGS_GROUP gKeyPadEventFlags;
-button gCurrentButton;
 
-TX_TIMER gContinuousButtonPressTimer;
+TX_THREAD gNetworkReceiveThread;
+CHAR ggNetworkReceiveThreadStack[KEY_PAD_THREAD_STACK_SIZE];
+TX_EVENT_FLAGS_GROUP gNetworkReceiveEventFlags;
+//******************************************************//
+
+TX_MUTEX gProbeAckMutex;
+
+bool gNeedToAckDeliverCounter = false;
+SMS_PROBE gSmsProbe;
+
 
 const CHAR gButton1[] = {'.',',','?','1'};
 const CHAR gButton2[] = {'a','b','c','2'};
@@ -41,7 +49,14 @@ const CHAR gButton0[] = {' ','0'};
 int gInEditContinuosNum;
 int gInEditRecipientIdLen;
 
+TX_TIMER gContinuousButtonPressTimer;
+//the button that latest pressed
 button gPressedButton;
+
+//buffer for a packet that latest received
+uint8_t gPacketReceivedBuffer[NETWORK_MAXIMUM_TRANSMISSION_UNIT];
+
+
 
 void buttonPressedCB(button b)
 {
@@ -50,20 +65,118 @@ void buttonPressedCB(button b)
 	tx_event_flags_set(&gKeyPadEventFlags,1,TX_OR);
 }
 
+/*
+ * call back when a packet was received.
+ */
+void networkReceiveCB(uint8_t buffer[], uint32_t size, uint32_t length)
+{
+	DBG_ASSERT(size>=length);
+	DBG_ASSERT(length<=NETWORK_MAXIMUM_TRANSMISSION_UNIT);
+
+	//copy the packet to the global
+	memcpy(gPacketReceivedBuffer,buffer,length);
+
+	//wake up the networkReceive thread
+	tx_event_flags_set(&gNetworkReceiveEventFlags,1,TX_OR);
+}
+
 void keyPadThreadMainFunc(ULONG v)
 {
 	ULONG actualFlag;
 
 	while(true)
 	{
+		//wait for a flag wake the thread up
 		tx_event_flags_get(&gKeyPadEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+
+		//handle the button that pressed
 		controllerButtonPressed(gPressedButton);
 	}
 }
 
+void networkReceiveThreadMainFun(ULONG v)
+{
+	ULONG actualFlag;
+	while(true)
+	{
+		//wait for a flag wake the thread up
+		tx_event_flags_get(&gNetworkReceiveEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+
+		//handle the packet that arrived
+		controllerPacketArrived();
+	}
+}
 void disableContinuousButtonPress(ULONG v)
 {
 	modelSetIsContinuousButtonPress(false);
+}
+
+/*
+ * call back when transmission done
+ */
+void txDone(const uint8_t *buffer, uint32_t size)
+{
+
+}
+
+
+/*
+ * call back when a packet was dropped during receiving.
+ */
+void rxPacketDrop(packet_dropped_reason_t)
+{
+
+}
+
+/*
+ * call back when a packet was dropped during transmission.
+ */
+void txPacketDrop(transmit_error_reason_t,
+                                           uint8_t *buffer,
+                                           uint32_t size,
+                                           uint32_t length )
+{
+
+}
+
+#define NET_BUF_SIZE 4
+
+desc_t gTranBuf[NET_BUF_SIZE];
+desc_t gRecBuf[NET_BUF_SIZE];
+uint8_t gRecData[NET_BUF_SIZE*NETWORK_MAXIMUM_TRANSMISSION_UNIT];
+
+result_t networkInit()
+{
+	result_t result;
+	int i;
+
+	/*
+	 * init network: init a full struct for the transmit_buffer and Receive_buffer,
+	 * 				call backs for the network: transmitted_cb, received_cb, dropped_cb, error_cb
+	 *
+	 */
+	network_call_back_t callBacks;
+	network_init_params_t initParams;
+
+	callBacks.dropped_cb = rxPacketDrop;
+	callBacks.recieved_cb = networkReceiveCB;
+	callBacks.transmit_error_cb = txPacketDrop;
+	callBacks.transmitted_cb = txDone;
+
+	initParams.list_call_backs = callBacks;
+
+    for(i = 0 ; i < NET_BUF_SIZE ; ++i)
+    {
+    	gRecBuf[i].pBuffer = (uint32_t)(gRecData+i*NETWORK_MAXIMUM_TRANSMISSION_UNIT);
+    	gRecBuf[i].buff_size = NETWORK_MAXIMUM_TRANSMISSION_UNIT;
+    }
+
+    initParams.transmit_buffer = tranBuf;
+    initParams.size_t_buffer = NET_BUF_SIZE;
+    initParams.recieve_buffer = recBuf;
+    initParams.size_r_buffer = NET_BUF_SIZE;
+
+	return network_init(&initParams);
 }
 
 TX_STATUS controllerInit()
@@ -91,7 +204,7 @@ TX_STATUS controllerInit()
 								);
 
 	status = tx_timer_create(	&gContinuousButtonPressTimer,
-								"Continuouse Button Press Timer",
+								"Continuous Button Press Timer",
 								disableContinuousButtonPress,
 								0,
 								KEY_PAD_TIMER_DURATION,
@@ -102,17 +215,29 @@ TX_STATUS controllerInit()
 	status = tx_event_flags_create(&gKeyPadEventFlags,"Keypad Event Flags");
 
 	//TODO handle status != TX_SUCCESS
-	ip_init(buttonPressedCB);
+
+	result_t result;
+	//init the key pad
+	result = ip_init(buttonPressedCB);
+	if(result != OPERATION_SUCCESS)
+		return;
 	ip_enable();
-	/*
-	 * init network: init a full struct for the transmit_buffer and recieve_buffer,
-	 * 				call backs for the network: transmitted_cb, received_cb, dropped_cb, error_cb
-	 *
-	 * init keypad: call back for the keypad
-	 * timer - for periodically send PROBE or SMS_SUBMIT
+
+
+	/* timer - for periodically send PROBE or SMS_SUBMIT
 	 * timer - for turning off continues button press after x ms
 	 *
 	 */
+	status = tx_thread_create(	&gNetworkReceiveThread,
+								"Network Receive Thread",
+								keyPadThreadMainFunc,
+								0,
+								gKeyPadThreadStack,
+								KEY_PAD_THREAD_STACK_SIZE,
+								KEY_PAD_PRIORITY,
+								KEY_PAD_PRIORITY,
+								TX_NO_TIME_SLICE, TX_AUTO_START
+								);
 
 	/*
 	 *
@@ -315,6 +440,11 @@ CHAR getNumberFromButton(button but)
 
 }
 
+void sendSms()
+{
+	SMS_SUBMIT* smsToSend = modelGetInEditSms();
+
+}
 
 void handleNumberScreen(button but)
 {
@@ -323,7 +453,9 @@ void handleNumberScreen(button but)
 	switch (but)
 	{
 	case BUTTON_OK:
+
 		//TODO: send the sms with network
+		sendSms();
 		return;
 	case BUTTON_STAR:
 		//cancel the message
@@ -434,8 +566,41 @@ void handleEditScreen(button but)
 }
 
 
-//pass the info
-void controllerPacketArrived(const uint8_t* pBuffer,const uint32_t size)
+
+void controllerPacketArrived()
 {
+	EMBSYS_STATUS status;
+
+	//try to parse to submit ack;
+	SMS_SUBMIT_ACK submitAck;
+	status = embsys_parse_submit_ack((char*)gPacketReceivedBuffer,&submitAck);
+	if(status == SUCCESS) return;
+
+	//try to parse to deliver sms
+	SMS_DELIVER deliverSms;
+	status = embsys_parse_deliver((char*)gPacketReceivedBuffer,&deliverSms);
+	if(status != SUCCESS) return;
+
+	//in case it is a delivered sms, add it to the DB
+	if(modelAcquireLock() != TX_SUCCESS)
+	{
+		return;
+	}
+
+	modelAddSmsToDb(&deliverSms,INCOMMING_MESSAGE);
+
+	modelReleaseLock();
+
+	//copy the sender id, for the probe ack
+	memcpy(gSmsProbe.sender_id,deliverSms.sender_id,ID_MAX_LENGTH);
+
+	//TODO: update the time stamp
+
+	//in case the screen is on the message listing, refresh the screen
+	if(modelGetCurrentScreenType() == MESSAGE_LISTING_SCREEN)
+	{
+		viewSetRefreshScreen();
+		viewSignal();
+	}
 }
 

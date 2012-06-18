@@ -117,6 +117,10 @@ UINT modelGetSmsDbSize();
 
 SmsLinkNodePtr modelGetFirstSms();
 
+TX_STATUS modelAcquireLock();
+
+TX_STATUS modelReleaseLock();
+
 #endif
 
 
