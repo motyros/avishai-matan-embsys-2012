@@ -91,11 +91,13 @@ void fillTimeStampBuffer(CHAR* buf)
 	twoDigitIntToStr(4*2,buf);
 }
 
+char gProbeBuf[PROBE_MESSAGE_MAX_SIZE];
+
 void networkSendPeriodicProbe(ULONG v)
 {
 	TX_STATUS status;
 	INT prevIsProbeAck;
-	char buf[PROBE_MESSAGE_MAX_SIZE];
+
 
 	//get the lock on the var which indicates if we need to ack or just probe
 
@@ -113,9 +115,9 @@ void networkSendPeriodicProbe(ULONG v)
 
 	UINT bufLen = 0;
 
-	embsys_fill_probe(buf,&gSmsProbe,needToAck,&bufLen);
+	embsys_fill_probe(gProbeBuf,&gSmsProbe,needToAck,&bufLen);
 
-	network_send_packet_start((uint8_t*)buf,bufLen,bufLen);
+	network_send_packet_start((uint8_t*)gProbeBuf,bufLen,bufLen);
 }
 
 //buffer for a packet that latest received

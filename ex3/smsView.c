@@ -187,9 +187,15 @@ void setMessageListingLineInfo(SmsLinkNodePtr pSms,int serialNumber,CHAR* pLine)
 	if (pSms->type == INCOMMING_MESSAGE)
 	{
 		pInSms = (SMS_DELIVER*)pSms->pSMS;
-		for(i = 0 ; i < ID_MAX_LENGTH ; ++i)
+
+		for(i = 0 ; (pInSms->sender_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
 		{
 			*pLine++ = pInSms->sender_id[i];
+		}
+
+		for(;i<ID_MAX_LENGTH ; ++i)
+		{
+			*pLine++ = ' ';
 		}
 		*pLine++ = 'I';
 	}
@@ -224,6 +230,8 @@ void renderMessageListingScreen()
 	//cehck if we need to render the whole screen
 	if (gViewRefreshScreen)
 	{
+		SmsLinkNodePtr firstMsg = pMessage;
+
 		//render every line
 		for(i = 0 ; i < SCREEN_HEIGHT-1 ; ++i)
 		{
@@ -241,6 +249,14 @@ void renderMessageListingScreen()
 				blockingSetLcdLine(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
 
 				pMessage = pMessage->pNext;
+
+				//since this is a cyclic list, need to rule out the case when
+				//not all message fits the screen and we don't want to print the first
+				//message again
+				if (pMessage == firstMsg)
+				{
+					pMessage = NULL;
+				}
 			}
 
 			if (pMessage==pSelectedMessage)
