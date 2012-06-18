@@ -40,10 +40,21 @@ TX_BLOCK_POOL gSmsPool;
 
 TX_BLOCK_POOL gSmsLinkListPool;
 
+TX_MUTEX gModelMutex;
+
 UINT modelInit()
 {
         //create a pool that stores all the sms
         UINT status;
+
+
+        status = tx_mutex_create(&gModelMutex,"Model Mutex",TX_INHERIT);
+
+        if (status != TX_SUCCESS)
+        {
+        	return status;
+        }
+
         /* Create a memory pool whose total size is for 100 SMS (the overhead
          * of the block is sizeof(void *).
          * starting at address 0x1000. Each block in this
@@ -318,4 +329,15 @@ UINT modelGetSmsDbSize()
 {
 	return gSmsDb.size;
 }
+
+TX_STATUS modelAcquireLock()
+{
+	return tx_mutex_get(&gModelMutex,TX_WAIT_FOREVER);
+}
+
+TX_STATUS modelReleaseLock()
+{
+	return tx_mutex_put(&gModelMutex);
+}
+
 

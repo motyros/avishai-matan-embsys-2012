@@ -1,17 +1,23 @@
 #include "TX/tx_api.h"
 #include "input_panel/input_panel.h"
+#include "network/network.h"
 #include "smsController.h"
 #include "smsView.h"
 #include "smsModel.h"
 #include "timer/timer.h"
-#include "network/network.h"
+#include "time.h"
+#include "common_defs.h"
 
-
+#define DEVICE_ID "06664120"
 #define KEY_PAD_TIMER_DURATION (500/TX_TICK_MS)
 #define NETWORK_SLEEP_PERIOD (100/TX_TICK_MS)
-
+#define NETWORK_PERIODIC_SEND_DURATION (100/TX_TICK_MS)
 #define KEY_PAD_THREAD_STACK_SIZE (1024)
+#define NETWORK_SEND_THREAD_STACK_SIZE (1024)
+#define NETWORK_RECEIVE_THREAD_STACK_SIZE (1024)
+
 #define KEY_PAD_PRIORITY (1)
+#define NETWORK_PRIORITY (0)
 #define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
 
 
@@ -19,6 +25,7 @@
 
 void handleNumberScreen(button but);
 void handleEditScreen(button but);
+void controllerPacketArrived();
 
 //**************Threads global variables****************//
 TX_THREAD gKeyPadThread;
@@ -26,7 +33,7 @@ CHAR gKeyPadThreadStack[KEY_PAD_THREAD_STACK_SIZE];
 TX_EVENT_FLAGS_GROUP gKeyPadEventFlags;
 
 TX_THREAD gNetworkReceiveThread;
-CHAR ggNetworkReceiveThreadStack[KEY_PAD_THREAD_STACK_SIZE];
+CHAR gNetworkReceiveThreadStack[NETWORK_RECEIVE_THREAD_STACK_SIZE];
 TX_EVENT_FLAGS_GROUP gNetworkReceiveEventFlags;
 //******************************************************//
 
@@ -34,6 +41,7 @@ TX_MUTEX gProbeAckMutex;
 
 bool gNeedToAckDeliverCounter = false;
 SMS_PROBE gSmsProbe;
+TX_TIMER gPeriodicSendTimer;
 
 
 const CHAR gButton1[] = {'.',',','?','1'};
@@ -52,6 +60,63 @@ int gInEditRecipientIdLen;
 TX_TIMER gContinuousButtonPressTimer;
 //the button that latest pressed
 button gPressedButton;
+
+//UINT gTimerExpNumber = 0;
+
+#define PROBE_MESSAGE_SIZE 8
+#define PROBE_MESSAGE_MAX_SIZE 22
+
+TX_MUTEX gProbeAckMutex;
+
+
+SMS_PROBE gSmsProbe;
+
+void twoDigitIntToStr(UINT n,char* str)
+{
+	*str++ = (n/10) + '0';
+	*str = (n % 10) + '0';
+}
+void fillTimeStampBuffer(CHAR* buf)
+{
+	time_t t = time(NULL);
+	struct tm tm = *localtime(&t);
+
+	twoDigitIntToStr((tm.tm_year + 1900) % 100,buf++);
+	twoDigitIntToStr(tm.tm_mon + 1,buf++);
+	twoDigitIntToStr(tm.tm_mday,buf++);
+	twoDigitIntToStr(tm.tm_hour,buf++);
+	twoDigitIntToStr(tm.tm_min,buf++);
+	twoDigitIntToStr(tm.tm_sec,buf++);
+	//since we are GMT+2, and the units are 15 minutes, we need 4*2 units
+	twoDigitIntToStr(4*2,buf);
+}
+
+void networkSendPeriodicProbe(ULONG v)
+{
+	TX_STATUS status;
+	INT prevIsProbeAck;
+	char buf[PROBE_MESSAGE_MAX_SIZE];
+
+	//get the lock on the var which indicates if we need to ack or just probe
+
+	//while ((status = tx_mutex_get(&gProbeAckMutex,TX_NO_WAIT)) == TX_NOT_AVAILABLE);
+
+	//if (status != TX_SUCCESS)
+	//{
+	//	return;
+	//}
+
+	bool needToAck = gNeedToAckDeliverCounter;
+	gNeedToAckDeliverCounter = false;
+
+	//tx_mutex_put(&gProbeAckMutex);
+
+	UINT bufLen = 0;
+
+	embsys_fill_probe(buf,&gSmsProbe,needToAck,&bufLen);
+
+	network_send_packet_start((uint8_t*)buf,bufLen,bufLen);
+}
 
 //buffer for a packet that latest received
 uint8_t gPacketReceivedBuffer[NETWORK_MAXIMUM_TRANSMISSION_UNIT];
@@ -77,7 +142,10 @@ void networkReceiveCB(uint8_t buffer[], uint32_t size, uint32_t length)
 	memcpy(gPacketReceivedBuffer,buffer,length);
 
 	//wake up the networkReceive thread
-	tx_event_flags_set(&gNetworkReceiveEventFlags,1,TX_OR);
+	TX_STATUS s = tx_event_flags_set(&gNetworkReceiveEventFlags,1,TX_OR);
+
+	int a = 4;
+	a = s;
 }
 
 void keyPadThreadMainFunc(ULONG v)
@@ -171,11 +239,12 @@ result_t networkInit()
     	gRecBuf[i].buff_size = NETWORK_MAXIMUM_TRANSMISSION_UNIT;
     }
 
-    initParams.transmit_buffer = tranBuf;
+    initParams.transmit_buffer = gTranBuf;
     initParams.size_t_buffer = NET_BUF_SIZE;
-    initParams.recieve_buffer = recBuf;
+    initParams.recieve_buffer = gRecBuf;
     initParams.size_r_buffer = NET_BUF_SIZE;
 
+    network_set_operating_mode(NETWORK_OPERATING_MODE_SMSC);
 	return network_init(&initParams);
 }
 
@@ -211,16 +280,38 @@ TX_STATUS controllerInit()
 								0,
 								TX_NO_ACTIVATE);
 
+	status = tx_timer_create(	&gPeriodicSendTimer,
+								"Periodic send timer",
+								networkSendPeriodicProbe,
+								0,
+								NETWORK_PERIODIC_SEND_DURATION*5,
+								NETWORK_PERIODIC_SEND_DURATION,
+								TX_AUTO_ACTIVATE);
 
 	status = tx_event_flags_create(&gKeyPadEventFlags,"Keypad Event Flags");
+
+	status = tx_event_flags_create(&gNetworkReceiveEventFlags,"Network Rec Event Flags");
+
+	status = tx_mutex_create(&gProbeAckMutex,"Probe Ack Mutex",TX_INHERIT);
+
+	memcpy(gSmsProbe.device_id,DEVICE_ID,strlen(DEVICE_ID));
+
+
+
+
+
 
 	//TODO handle status != TX_SUCCESS
 
 	result_t result;
 	//init the key pad
 	result = ip_init(buttonPressedCB);
+
 	if(result != OPERATION_SUCCESS)
-		return;
+	{
+		return result;
+	}
+
 	ip_enable();
 
 
@@ -230,12 +321,12 @@ TX_STATUS controllerInit()
 	 */
 	status = tx_thread_create(	&gNetworkReceiveThread,
 								"Network Receive Thread",
-								keyPadThreadMainFunc,
+								networkReceiveThreadMainFun,
 								0,
-								gKeyPadThreadStack,
-								KEY_PAD_THREAD_STACK_SIZE,
-								KEY_PAD_PRIORITY,
-								KEY_PAD_PRIORITY,
+								gNetworkReceiveThreadStack,
+								NETWORK_RECEIVE_THREAD_STACK_SIZE,
+								NETWORK_PRIORITY,
+								NETWORK_PRIORITY,
 								TX_NO_TIME_SLICE, TX_AUTO_START
 								);
 
@@ -249,6 +340,8 @@ TX_STATUS controllerInit()
 
 	modelSetFirstSmsOnScreen(modelGetFirstSms());
 	modelSetSelectedSms(modelGetFirstSms());
+
+	networkInit();
 
 	return TX_SUCCESS;
 }
@@ -443,7 +536,11 @@ CHAR getNumberFromButton(button but)
 void sendSms()
 {
 	SMS_SUBMIT* smsToSend = modelGetInEditSms();
-
+	/*if (modelGetSmsDbSize() == 1)
+		{
+			modelSetFirstSmsOnScreen(modelGetFirstSms());
+			modelSetSelectedSms(modelGetFirstSms());
+		}*/
 }
 
 void handleNumberScreen(button but)
@@ -567,6 +664,9 @@ void handleEditScreen(button but)
 
 
 
+/*
+ * let the controller know that packet has arrived
+ */
 void controllerPacketArrived()
 {
 	EMBSYS_STATUS status;
@@ -589,15 +689,23 @@ void controllerPacketArrived()
 
 	modelAddSmsToDb(&deliverSms,INCOMMING_MESSAGE);
 
+	if (modelGetSmsDbSize() == 1)
+	{
+		modelSetFirstSmsOnScreen(modelGetFirstSms());
+		modelSetSelectedSms(modelGetFirstSms());
+	}
+
 	modelReleaseLock();
 
 	//copy the sender id, for the probe ack
 	memcpy(gSmsProbe.sender_id,deliverSms.sender_id,ID_MAX_LENGTH);
+	memcpy(gSmsProbe.timestamp,deliverSms.timestamp,TIMESTAMP_MAX_LENGTH);
 
-	//TODO: update the time stamp
+	gNeedToAckDeliverCounter = true;
 
 	//in case the screen is on the message listing, refresh the screen
-	if(modelGetCurrentScreenType() == MESSAGE_LISTING_SCREEN)
+
+	if(modelGetCurentScreenType() == MESSAGE_LISTING_SCREEN)
 	{
 		viewSetRefreshScreen();
 		viewSignal();

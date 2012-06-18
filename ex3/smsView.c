@@ -438,6 +438,9 @@ void viewRefresh()
 {
 	screen_type currentScreen = modelGetCurentScreenType();
 	//according the current screen, refresh and current operation refresh the display
+
+	modelAcquireLock();
+
 	switch(currentScreen)
 	{
 		case MESSAGE_LISTING_SCREEN:
@@ -454,6 +457,8 @@ void viewRefresh()
 			break;
 
 	}
+
+	modelReleaseLock();
 }
 
 bool viewIsFirstRowSelected()

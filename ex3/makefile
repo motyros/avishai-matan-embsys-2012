@@ -31,7 +31,7 @@ main.o: main.c TX/tx_api.h common_defs.h smsController.h timer/timer.h smsView.h
 	mcc -c -a6 -g -w3 $< -o $@
 
 a.out: main.o input_panel.o LCD.o network.o timer.o smsModel.o smsView.o smsController.o ivt.o device.svr3
-	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
+	mcc -a6 $+ embsys_sms_protocol.o TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
 
 tar:
 	tar --exclude=".*" -cvjf avishl02_matanp01 flash input_panel LCD network timer ivt.s common_defs.h README makefile

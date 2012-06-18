@@ -16,10 +16,5 @@ TX_STATUS controllerInit();
  */
 void controllerButtonPressed(const button b);
 
-/*
- * let the controller know that packet has arrived
- */
-void controllerPacketArrived();
-
 #endif
 

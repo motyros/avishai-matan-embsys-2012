@@ -1,7 +1,7 @@
 #ifndef __SMS_PROTOCOL_H__
 #define __SMS_PROTOCOL_H__
 
-#define ID_MAX_LENGTH 9
+#define ID_MAX_LENGTH 8
 #define TIMESTAMP_MAX_LENGTH 14
 #define DATA_MAX_LENGTH 160
 
