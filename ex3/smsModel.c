@@ -11,54 +11,63 @@
 #define SMS_DB_POOL_REAL_SIZE (MAX_NUM_SMS*(SMS_DB_BLOCK_SIZE+BLOCK_OVERHEAD))
 
 
-
+//the block of memory for the pool with all the smses 
 CHAR gSmsBlockPool[SMS_POOL_REAL_SIZE];
+//the block of memory for the pool with the sms linked list data-base
 CHAR gSmsDbBlockPool[SMS_DB_POOL_REAL_SIZE];
 
+// a sms linked list
 typedef struct
 {
         SmsLinkNodePtr  pHead;
         SmsLinkNodePtr  pTail;
-        int                     size;
+        int             size;
 }SmsLinkedList;
 
+//the sms linked list data-base
 SmsLinkedList gSmsDb;
 
+//the current screen on the LCD disply
 screen_type gCurrentScreen;
 
+//the selected sms on the screen
 SmsLinkNodePtr gpSelectedSms;
 
+//the first sms on the screen
 SmsLinkNodePtr gpFirstSmsOnScreen;
 
-button gLastPreddedButton;
+//the last pressed button on the keypad
+button gLastPressedButton;
 
+//is the button in continuous mode
 bool gIsContinuousButtonPress = false;
 
+//the sms that is in edit
 SMS_SUBMIT gInEditSms;
 
+//the pool that stores all of the smses
 TX_BLOCK_POOL gSmsPool;
 
+//the pool that stores all the nodes of the sms linked list
 TX_BLOCK_POOL gSmsLinkListPool;
 
+//the lock on the smsModel
 TX_MUTEX gModelMutex;
 
 UINT modelInit()
 {
-        //create a pool that stores all the sms
         UINT status;
-
-
+		//create a pool that stores all the sms
         status = tx_mutex_create(&gModelMutex,"Model Mutex",TX_INHERIT);
-
         if (status != TX_SUCCESS)
         {
-        	return status;
+                return status;
         }
 
         /* Create a memory pool whose total size is for 100 SMS (the overhead
          * of the block is sizeof(void *).
-         * starting at address 0x1000. Each block in this
-         * pool is defined to be sizeof(SMS_SUBMIT) bytes long.
+         * starting at address 'gSmsBlockPool'. Each block in this
+         * pool is defined to be SMS_BLOCK_SIZE==sizeof(SMS_DELIVER) bytes long.
          */
         status = tx_block_pool_create(&gSmsPool, "SmsPool",
                         SMS_BLOCK_SIZE, gSmsBlockPool, SMS_POOL_REAL_SIZE);
@@ -70,6 +79,12 @@ UINT modelInit()
          */
         if(status != TX_SUCCESS) return status;
 
+		//create a pool that stores all the nodes of the sms linked list
+        /* Create a memory pool whose total size is for 100 nodes (the overhead
+         * of the block is sizeof(void *).
+         * starting at address 'gSmsDbBlockPool'. Each block in this
+         * pool is defined to be SMS_DB_BLOCK_SIZE==sizeof(SmsLinkNode) bytes long.
+         */		
         status = tx_block_pool_create(&gSmsLinkListPool, "SmsLinkListPool",
                         SMS_DB_BLOCK_SIZE, gSmsDbBlockPool, SMS_DB_POOL_REAL_SIZE);
 
@@ -80,6 +95,7 @@ UINT modelInit()
                 return status;
         }
 
+		//init the list to empty
         gSmsDb.pHead = NULL;
         gSmsDb.pTail = NULL;
         gSmsDb.size = 0;
@@ -95,27 +111,27 @@ screen_type modelGetCurentScreenType()
 
 void modelSetCurrentScreenType(screen_type screen)
 {
-	gCurrentScreen = screen;
+        gCurrentScreen = screen;
 }
 
 button modelGetLastButton()
 {
-	return gLastPreddedButton;
+        return gLastPressedButton;
 }
 
 void modelSetLastButton(const button b)
 {
-	gLastPreddedButton = b;
+        gLastPressedButton = b;
 }
 
 void modelSetIsContinuousButtonPress(bool status)
 {
-	gIsContinuousButtonPress = status;
+        gIsContinuousButtonPress = status;
 }
 
 bool modelIsContinuousButtonPress()
 {
-	return gIsContinuousButtonPress;
+        return gIsContinuousButtonPress;
 }
 
 //updates the head and tail to point to each other
@@ -151,10 +167,10 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
          * address of the allocated block of memory.
          */
         if(status != TX_SUCCESS)
-		{
+                {
             tx_block_release(pNewSms);
-        	return status;
-		}
+                return status;
+                }
 
         pNewSms->pNext = NULL;
         pNewSms->pPrev = gSmsDb.pTail;
@@ -256,7 +272,7 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
         }
         else
         {
-        		SmsLinkNodePtr pPrevNode = pSms->pPrev;
+                        SmsLinkNodePtr pPrevNode = pSms->pPrev;
                 pPrevNode->pNext = pSms->pNext;
                 pSms->pNext->pPrev = pPrevNode;
         }
@@ -271,26 +287,26 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
 
 int modelGetSmsSerialNumber(const SmsLinkNodePtr pSms)
 {
-    	DBG_ASSERT(pSms != NULL);
-		DBG_ASSERT(gSmsDb.size > 0);
-		//if the pointer points to the end of the list
-		//note: this check is needed, because the loop does not checks the tail.
-		if(pSms == gSmsDb.pTail)
-		{
-				return gSmsDb.size;
-		}
-		int serialNum = 1;
-		SmsLinkNodePtr pNode;
-		//go over the list to indicate the serial number
-		for(pNode = gSmsDb.pHead ; pNode->pNext != NULL ; pNode = pNode->pNext)
-		{
-				if(pNode == pSms) return serialNum;
-				++serialNum;
-		}
-		
-		//if the sms pointer was not found
-		return -1;
-		
+        DBG_ASSERT(pSms != NULL);
+                DBG_ASSERT(gSmsDb.size > 0);
+                //if the pointer points to the end of the list
+                //note: this check is needed, because the loop does not checks the tail.
+                if(pSms == gSmsDb.pTail)
+                {
+                                return gSmsDb.size;
+                }
+                int serialNum = 1;
+                SmsLinkNodePtr pNode;
+                //go over the list to indicate the serial number
+                for(pNode = gSmsDb.pHead ; pNode->pNext != NULL ; pNode = pNode->pNext)
+                {
+                                if(pNode == pSms) return serialNum;
+                                ++serialNum;
+                }
+                
+                //if the sms pointer was not found
+                return -1;
+                
 }
 
 SMS_SUBMIT* modelGetInEditSms()
@@ -316,28 +332,29 @@ SmsLinkNodePtr modelGetSelectedSms()
 
 void modelSetSelectedSms(const SmsLinkNodePtr pSms)
 {
-	gpSelectedSms = pSms;
+        gpSelectedSms = pSms;
 }
 
 
 SmsLinkNodePtr modelGetFirstSms()
 {
-	return gSmsDb.pHead;
+        return gSmsDb.pHead;
 }
 
 UINT modelGetSmsDbSize()
 {
-	return gSmsDb.size;
+        return gSmsDb.size;
 }
 
 TX_STATUS modelAcquireLock()
 {
-	return tx_mutex_get(&gModelMutex,TX_WAIT_FOREVER);
+        return tx_mutex_get(&gModelMutex,TX_WAIT_FOREVER);
 }
 
 TX_STATUS modelReleaseLock()
 {
-	return tx_mutex_put(&gModelMutex);
+        return tx_mutex_put(&gModelMutex);
 }
+
 
 
