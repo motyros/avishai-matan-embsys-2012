@@ -57,7 +57,7 @@ TX_MUTEX gModelMutex;
 UINT modelInit()
 {
         UINT status;
-		//create a pool that stores all the sms
+        //create a pool that stores all the sms
         status = tx_mutex_create(&gModelMutex,"Model Mutex",TX_INHERIT);
         if (status != TX_SUCCESS)
         {
@@ -79,12 +79,12 @@ UINT modelInit()
          */
         if(status != TX_SUCCESS) return status;
 
-		//create a pool that stores all the nodes of the sms linked list
+        //create a pool that stores all the nodes of the sms linked list
         /* Create a memory pool whose total size is for 100 nodes (the overhead
          * of the block is sizeof(void *).
          * starting at address 'gSmsDbBlockPool'. Each block in this
          * pool is defined to be SMS_DB_BLOCK_SIZE==sizeof(SmsLinkNode) bytes long.
-         */		
+         */        
         status = tx_block_pool_create(&gSmsLinkListPool, "SmsLinkListPool",
                         SMS_DB_BLOCK_SIZE, gSmsDbBlockPool, SMS_DB_POOL_REAL_SIZE);
 
@@ -95,7 +95,7 @@ UINT modelInit()
                 return status;
         }
 
-		//init the list to empty
+        //init the list to empty
         gSmsDb.pHead = NULL;
         gSmsDb.pTail = NULL;
         gSmsDb.size = 0;
@@ -134,8 +134,10 @@ bool modelIsContinuousButtonPress()
         return gIsContinuousButtonPress;
 }
 
-//updates the head and tail to point to each other
-//to have a cyclic list
+/*
+ * updates the head and tail to point to each other
+ * to have a cyclic list
+ */
 void updateHeadAndTailCyclic()
 {
     gSmsDb.pHead->pPrev = gSmsDb.pTail;
@@ -152,7 +154,7 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
         SmsLinkNodePtr pNewSms;
 
 
-        //allocate the linked list node
+        //allocate a memory block for the linked list node, form the SmsLinkListPool
         status = tx_block_allocate(&gSmsLinkListPool, (VOID**) &pNewSms,TX_NO_WAIT);
         /* If status equals TX_SUCCESS, pNewNode contains the
          * address of the allocated block of memory.
@@ -161,23 +163,28 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
         if(status != TX_SUCCESS) return status;
 
 
-        /* Allocate a memory block from SmsPool.*/
+        // Allocate a memory block for the sms, from the SmsPool.
         status = tx_block_allocate(&gSmsPool, (VOID**) &pNewSms->pSMS,TX_NO_WAIT);
         /* If status equals TX_SUCCESS, pSms contains the
          * address of the allocated block of memory.
          */
+         
+         //in case the allocate fail release the block of the sms node
         if(status != TX_SUCCESS)
-                {
+        {
             tx_block_release(pNewSms);
                 return status;
-                }
+        }
 
+        //set the fields of the linked list node
         pNewSms->pNext = NULL;
         pNewSms->pPrev = gSmsDb.pTail;
         pNewSms->type = type;
 
+        //copy the given sms to the allocated memory
         memcpy(pNewSms->pSMS,pSms,SMS_BLOCK_SIZE);
 
+        //in case the list is empty
         if(gSmsDb.size == 0)
         {
                 DBG_ASSERT(gSmsDb.pHead == NULL);
@@ -186,23 +193,25 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
                 //it is a cyclic list
                 pNewSms->pNext = pNewSms;
                 pNewSms->pPrev = pNewSms;
-                //the first node in the list - the head+tail
+                //insert the first node in to the list - replace the head and tail
                 gSmsDb.pHead = pNewSms;
                 gSmsDb.pTail = pNewSms;
         }
+        //in case the list has only one node (head==tail!=null)
         else if(gSmsDb.size == 1)
         {
                 DBG_ASSERT(gSmsDb.pHead == gSmsDb.pTail);
 
-                //the second node in the list - add to the tail (that is one after the head)
+                //insert the second node in to the list - replace to the tail
                 gSmsDb.pTail = pNewSms;
                 gSmsDb.pHead->pNext = gSmsDb.pTail;
                 gSmsDb.pTail->pPrev = gSmsDb.pHead;
 
-                //it is a cyclic list
+                //update the head and tail to be a cyclic list
                 updateHeadAndTailCyclic();
 
         }
+        //in case the list has more then one node (head!=tail)
         else
         {
                 //update the tail of the linked list
@@ -210,7 +219,7 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
                 pNewSms->pPrev = gSmsDb.pTail;
                 gSmsDb.pTail = pNewSms;
 
-                //it is a cyclic list
+                //update the head and tail to be a cyclic list
                 updateHeadAndTailCyclic();
 
         }
@@ -222,11 +231,11 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 
 TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
 {
-
         DBG_ASSERT(pSms != NULL);
 
         TX_STATUS status;
 
+        //can't remove a sms from empty data-base
         if(gSmsDb.size == 0)
         {
                 DBG_ASSERT(gSmsDb.pHead == NULL);
@@ -235,7 +244,7 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
                 return TX_PTR_ERROR;
         }
 
-        /* Release a memory block back to the pool. */
+        // Release a memory block back to the smses pool.
         status = tx_block_release(pSms->pSMS);
         /* If status equals TX_SUCCESS, the block of memory pointed
          * to by pSms->pSMS has been returned to the pool.
@@ -243,39 +252,47 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
 
         //if(status != TX_SUCCESS) return status;
 
-        //if it is the last node
+        //if the node is the last node in the list, so the node is 
+        //the head and the tail of the list.
         if(gSmsDb.size == 1)
         {
                 DBG_ASSERT(gSmsDb.pHead == gSmsDb.pTail);
+                //reset the head and tail
                 gSmsDb.pHead = NULL;
                 gSmsDb.pTail = NULL;
         }
 
-        //if the node is the head
+        //if the node is the head of the list
         else if(pSms == gSmsDb.pHead)
         {
+                //remove the head
                 gSmsDb.pHead = pSms->pNext;
                 gSmsDb.pHead->pPrev = NULL;
 
-                //it is a cyclic list
+                //update the head and tail to be a cyclic list
                 updateHeadAndTailCyclic();
         }
 
-        //if the node is the tail
+        //if the node is the tail of the list
         else if(pSms == gSmsDb.pTail)
         {
+                //remove the tail
                 gSmsDb.pTail = pSms->pPrev;
                 gSmsDb.pTail->pNext = NULL;
 
-                //it is a cyclic list
+                //update the head and tail to be a cyclic list
                 updateHeadAndTailCyclic();
         }
+        //if the node is not the head and not the tail of the list
         else
         {
-                        SmsLinkNodePtr pPrevNode = pSms->pPrev;
+                //remove the node
+                SmsLinkNodePtr pPrevNode = pSms->pPrev;
                 pPrevNode->pNext = pSms->pNext;
                 pSms->pNext->pPrev = pPrevNode;
         }
+        
+        //release the memory block to the smses linked list pool.
         status = tx_block_release(pSms);
 
         //if(status != TX_SUCCESS) return status;
@@ -288,25 +305,29 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
 int modelGetSmsSerialNumber(const SmsLinkNodePtr pSms)
 {
         DBG_ASSERT(pSms != NULL);
-                DBG_ASSERT(gSmsDb.size > 0);
-                //if the pointer points to the end of the list
-                //note: this check is needed, because the loop does not checks the tail.
-                if(pSms == gSmsDb.pTail)
-                {
-                                return gSmsDb.size;
-                }
-                int serialNum = 1;
-                SmsLinkNodePtr pNode;
-                //go over the list to indicate the serial number
-                for(pNode = gSmsDb.pHead ; pNode->pNext != NULL ; pNode = pNode->pNext)
-                {
-                                if(pNode == pSms) return serialNum;
-                                ++serialNum;
-                }
+        DBG_ASSERT(gSmsDb.size > 0);
+        
+        //start the serial number from 1
+        int serialNum = 1;
+        //if the pointer points to the start of the list
+        /* note: this check is needed, because the loop, later in this method, does not 
+         * checks the head - in case the list has only one node.*/
+        if(pSms == gSmsDb.pHead)
+        {
+                return serialNum;
+        }
+        
+        SmsLinkNodePtr pNode;
+        //go over the list to indicate the serial number
+        //note: it is a cyclic list, so the loop will finish
+        for(pNode = gSmsDb.pHead ; pNode->pNext != gSmsDb.pHead ; pNode = pNode->pNext)
+        {
+                if(pNode == pSms) return serialNum;
+                ++serialNum;
+        }
                 
-                //if the sms pointer was not found
-                return -1;
-                
+        //if the sms pointer was not found
+        return -1;        
 }
 
 SMS_SUBMIT* modelGetInEditSms()
@@ -355,6 +376,7 @@ TX_STATUS modelReleaseLock()
 {
         return tx_mutex_put(&gModelMutex);
 }
+
 
 
 
