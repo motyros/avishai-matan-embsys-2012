@@ -15,11 +15,17 @@
 #define KEY_PAD_THREAD_STACK_SIZE (1024)
 #define NETWORK_SEND_THREAD_STACK_SIZE (1024)
 #define NETWORK_RECEIVE_THREAD_STACK_SIZE (1024)
+#define NETWORK_SEND_THREAD_STACK_SIZE (1024)
 
 #define KEY_PAD_PRIORITY (1)
 #define NETWORK_PRIORITY (0)
 #define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
 
+typedef enum
+{
+	SEND_PROBE = 1,
+	SEND_PROBE_ACK = 2,
+} NetworkSendFlags;
 
 //**** FWD Declaration ****\\
 
@@ -35,6 +41,10 @@ TX_EVENT_FLAGS_GROUP gKeyPadEventFlags;
 TX_THREAD gNetworkReceiveThread;
 CHAR gNetworkReceiveThreadStack[NETWORK_RECEIVE_THREAD_STACK_SIZE];
 TX_EVENT_FLAGS_GROUP gNetworkReceiveEventFlags;
+
+TX_THREAD gNetworkSendThread;
+CHAR gNetworkSendThreadStack[NETWORK_SEND_THREAD_STACK_SIZE];
+TX_EVENT_FLAGS_GROUP gNetworkSendEventFlags;
 //******************************************************//
 
 TX_MUTEX gProbeAckMutex;
@@ -93,31 +103,33 @@ void fillTimeStampBuffer(CHAR* buf)
 
 char gProbeBuf[PROBE_MESSAGE_MAX_SIZE];
 
+/*
+ *   this the periodic probe timer callback
+ */
 void networkSendPeriodicProbe(ULONG v)
 {
-	TX_STATUS status;
-	INT prevIsProbeAck;
+
+	//signal the thread to send probe
+	tx_event_flags_set(&gNetworkSendEventFlags,SEND_PROBE,TX_OR);
+}
 
 
-	//get the lock on the var which indicates if we need to ack or just probe
+void networkSendThreadMainFunc(ULONG v)
+{
+	ULONG actualFlag;
 
-	//while ((status = tx_mutex_get(&gProbeAckMutex,TX_NO_WAIT)) == TX_NOT_AVAILABLE);
+	while(true)
+	{
+		//wait for a flag wake the thread up
+		tx_event_flags_get(&gNetworkSendEventFlags,SEND_PROBE|SEND_PROBE_ACK,TX_OR_CLEAR,&actualFlag,TX_WAIT_FOREVER);
 
-	//if (status != TX_SUCCESS)
-	//{
-	//	return;
-	//}
+		UINT bufLen = 0;
 
-	bool needToAck = gNeedToAckDeliverCounter;
-	gNeedToAckDeliverCounter = false;
+		embsys_fill_probe(gProbeBuf,&gSmsProbe,actualFlag & SEND_PROBE_ACK,&bufLen);
 
-	//tx_mutex_put(&gProbeAckMutex);
+		network_send_packet_start((uint8_t*)gProbeBuf,bufLen,bufLen);
 
-	UINT bufLen = 0;
-
-	embsys_fill_probe(gProbeBuf,&gSmsProbe,needToAck,&bufLen);
-
-	network_send_packet_start((uint8_t*)gProbeBuf,bufLen,bufLen);
+	}
 }
 
 //buffer for a packet that latest received
@@ -137,17 +149,17 @@ void buttonPressedCB(button b)
  */
 void networkReceiveCB(uint8_t buffer[], uint32_t size, uint32_t length)
 {
+
 	DBG_ASSERT(size>=length);
 	DBG_ASSERT(length<=NETWORK_MAXIMUM_TRANSMISSION_UNIT);
+
+	tx_timer_deactivate(&gPeriodicSendTimer);
 
 	//copy the packet to the global
 	memcpy(gPacketReceivedBuffer,buffer,length);
 
 	//wake up the networkReceive thread
-	TX_STATUS s = tx_event_flags_set(&gNetworkReceiveEventFlags,1,TX_OR);
-
-	int a = 4;
-	a = s;
+	tx_event_flags_set(&gNetworkReceiveEventFlags,1,TX_OR);
 }
 
 void keyPadThreadMainFunc(ULONG v)
@@ -174,6 +186,8 @@ void networkReceiveThreadMainFun(ULONG v)
 
 		//handle the packet that arrived
 		controllerPacketArrived();
+
+		tx_timer_activate(gPeriodicSendTimer);
 	}
 }
 void disableContinuousButtonPress(ULONG v)
@@ -263,16 +277,6 @@ TX_STATUS controllerInit()
 
 	TX_STATUS status;
 
-	status = tx_thread_create(	&gKeyPadThread,
-								"Keypad Thread",
-								keyPadThreadMainFunc,
-								0,
-								gKeyPadThreadStack,
-								KEY_PAD_THREAD_STACK_SIZE,
-								KEY_PAD_PRIORITY,
-								KEY_PAD_PRIORITY,
-								TX_NO_TIME_SLICE, TX_AUTO_START
-								);
 
 	status = tx_timer_create(	&gContinuousButtonPressTimer,
 								"Continuous Button Press Timer",
@@ -290,9 +294,46 @@ TX_STATUS controllerInit()
 								NETWORK_PERIODIC_SEND_DURATION,
 								TX_AUTO_ACTIVATE);
 
+
+	status = tx_thread_create(	&gKeyPadThread,
+								"Keypad Thread",
+								keyPadThreadMainFunc,
+								0,
+								gKeyPadThreadStack,
+								KEY_PAD_THREAD_STACK_SIZE,
+								KEY_PAD_PRIORITY,
+								KEY_PAD_PRIORITY,
+								TX_NO_TIME_SLICE, TX_AUTO_START
+								);
+
+	status = tx_thread_create(	&gNetworkReceiveThread,
+								"Network Receive Thread",
+								networkReceiveThreadMainFun,
+								0,
+								gNetworkReceiveThreadStack,
+								NETWORK_RECEIVE_THREAD_STACK_SIZE,
+								NETWORK_PRIORITY,
+								NETWORK_PRIORITY,
+								TX_NO_TIME_SLICE, TX_AUTO_START
+								);
+
+	status = tx_thread_create(	&gNetworkSendThread,
+								"Network Send Thread",
+								networkSendThreadMainFunc,
+								0,
+								gNetworkSendThreadStack,
+								NETWORK_SEND_THREAD_STACK_SIZE,
+								NETWORK_PRIORITY,
+								NETWORK_PRIORITY,
+								TX_NO_TIME_SLICE, TX_AUTO_START
+								);
+
+
 	status = tx_event_flags_create(&gKeyPadEventFlags,"Keypad Event Flags");
 
 	status = tx_event_flags_create(&gNetworkReceiveEventFlags,"Network Rec Event Flags");
+
+	status = tx_event_flags_create(&gNetworkSendEventFlags,"Network Send Event Flags");
 
 	status = tx_mutex_create(&gProbeAckMutex,"Probe Ack Mutex",TX_INHERIT);
 
@@ -321,16 +362,6 @@ TX_STATUS controllerInit()
 	 * timer - for turning off continues button press after x ms
 	 *
 	 */
-	status = tx_thread_create(	&gNetworkReceiveThread,
-								"Network Receive Thread",
-								networkReceiveThreadMainFun,
-								0,
-								gNetworkReceiveThreadStack,
-								NETWORK_RECEIVE_THREAD_STACK_SIZE,
-								NETWORK_PRIORITY,
-								NETWORK_PRIORITY,
-								TX_NO_TIME_SLICE, TX_AUTO_START
-								);
 
 	/*
 	 *
@@ -675,42 +706,49 @@ void controllerPacketArrived()
 
 	//try to parse to submit ack;
 	SMS_SUBMIT_ACK submitAck;
-	status = embsys_parse_submit_ack((char*)gPacketReceivedBuffer,&submitAck);
-	if(status == SUCCESS) return;
 
-	//try to parse to deliver sms
-	SMS_DELIVER deliverSms;
-	status = embsys_parse_deliver((char*)gPacketReceivedBuffer,&deliverSms);
-	if(status != SUCCESS) return;
-
-	//in case it is a delivered sms, add it to the DB
-	if(modelAcquireLock() != TX_SUCCESS)
+	do
 	{
-		return;
-	}
+		status = embsys_parse_submit_ack((char*)gPacketReceivedBuffer,&submitAck);
+		if(status == SUCCESS) break;
 
-	modelAddSmsToDb(&deliverSms,INCOMMING_MESSAGE);
+		//try to parse to deliver sms
+		SMS_DELIVER deliverSms;
+		status = embsys_parse_deliver((char*)gPacketReceivedBuffer,&deliverSms);
+		if(status != SUCCESS) break;
 
-	if (modelGetSmsDbSize() == 1)
-	{
-		modelSetFirstSmsOnScreen(modelGetFirstSms());
-		modelSetSelectedSms(modelGetFirstSms());
-	}
+		//in case it is a delivered sms, add it to the DB
+		if(modelAcquireLock() != TX_SUCCESS)
+		{
+			break;
+		}
 
-	modelReleaseLock();
+		modelAddSmsToDb(&deliverSms,INCOMMING_MESSAGE);
 
-	//copy the sender id, for the probe ack
-	memcpy(gSmsProbe.sender_id,deliverSms.sender_id,ID_MAX_LENGTH);
-	memcpy(gSmsProbe.timestamp,deliverSms.timestamp,TIMESTAMP_MAX_LENGTH);
+		if (modelGetSmsDbSize() == 1)
+		{
+			modelSetFirstSmsOnScreen(modelGetFirstSms());
+			modelSetSelectedSms(modelGetFirstSms());
+		}
 
-	gNeedToAckDeliverCounter = true;
+		modelReleaseLock();
 
-	//in case the screen is on the message listing, refresh the screen
+		//copy the sender id, for the probe ack
+		memcpy(gSmsProbe.sender_id,deliverSms.sender_id,ID_MAX_LENGTH);
+		memcpy(gSmsProbe.timestamp,deliverSms.timestamp,TIMESTAMP_MAX_LENGTH);
 
-	if(modelGetCurentScreenType() == MESSAGE_LISTING_SCREEN)
-	{
-		viewSetRefreshScreen();
-		viewSignal();
-	}
+		//gNeedToAckDeliverCounter = true;
+
+		//signal the send thread to send probe akc
+		tx_event_flags_set(&gNetworkSendEventFlags,SEND_PROBE_ACK,TX_AND);
+
+		//in case the screen is on the message listing, refresh the screen
+		if(modelGetCurentScreenType() == MESSAGE_LISTING_SCREEN)
+		{
+			viewSetRefreshScreen();
+			viewSignal();
+		}
+	}while(false);
+
 }
 
