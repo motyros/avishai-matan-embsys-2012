@@ -135,12 +135,12 @@ UINT modelGetSmsDbSize();
 SmsLinkNodePtr modelGetFirstSms();
 
 /*
- * try to get the lock on the sms data-base
+ * try to get the lock (mutex) on the sms data-base 
  */
 TX_STATUS modelAcquireLock();
 
 /*
- * try to release the lock on the sms data-base
+ * try to release the lock (mutex) on the sms data-base
  */
 TX_STATUS modelReleaseLock();
 
