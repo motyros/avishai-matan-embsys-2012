@@ -10,8 +10,8 @@
 
 typedef enum
 {
-    INCOMMING_MESSAGE		= 0,
-    OUTGOING_MESSAGE		= 1,	
+    INCOMMING_MESSAGE           = 0,
+    OUTGOING_MESSAGE            = 1,    
 } message_type;
 
 #define MAX_NUM_SMS (100)
@@ -41,10 +41,10 @@ typedef struct SmsLinkNode* SmsLinkNodePtr;
 
 struct SmsLinkNode
 {
-	SmsLinkNodePtr	pNext;
-	SmsLinkNodePtr	pPrev;
-	message_type	type;
-	void*			pSMS;
+        SmsLinkNodePtr  pNext;
+        SmsLinkNodePtr  pPrev;
+        message_type    type;
+        void*                   pSMS;
 };
 
 
@@ -94,13 +94,24 @@ int modelGetSmsSerialNumber(const SmsLinkNodePtr pSms);
  */
 SMS_SUBMIT* modelGetInEditSms();
 
-
+/*
+ * get the first sms on the screen
+ */
 SmsLinkNodePtr modelGetFirstSmsOnScreen();
 
+/*
+ * set the first sms on screen
+ */
 void modelSetFirstSmsOnScreen(const SmsLinkNodePtr pSms);
 
+/*
+ * get the selected sms
+ */
 SmsLinkNodePtr modelGetSelectedSms();
 
+/*
+ * set the selected sms
+ */
 void modelSetSelectedSms(const SmsLinkNodePtr pSms);
 
 /*
@@ -113,23 +124,26 @@ void modelSetIsContinuousButtonPress(bool status);
  */
 bool modelIsContinuousButtonPress();
 
+/*
+ * get the size of the sms linked list data-base
+ */
 UINT modelGetSmsDbSize();
 
+/*
+ * get the first sms of the sms linked list
+ */
 SmsLinkNodePtr modelGetFirstSms();
 
+/*
+ * try to get the lock on the sms data-base
+ */
 TX_STATUS modelAcquireLock();
 
+/*
+ * try to release the lock on the sms data-base
+ */
 TX_STATUS modelReleaseLock();
 
 #endif
-
-
-
-
-
-
-
-
-
 
 
