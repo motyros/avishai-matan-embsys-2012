@@ -9,7 +9,7 @@
 #include "common_defs.h"
 
 #define DEVICE_ID "06664120"
-#define KEY_PAD_TIMER_DURATION (500/TX_TICK_MS)
+#define KEY_PAD_TIMER_DURATION (150/TX_TICK_MS)
 #define NETWORK_SLEEP_PERIOD (100/TX_TICK_MS)
 #define NETWORK_PERIODIC_SEND_DURATION (100/TX_TICK_MS)
 #define KEY_PAD_THREAD_STACK_SIZE (1024)
@@ -517,6 +517,8 @@ void handleDisplayScreen(button b)
 	viewSetRefreshScreen();
 
 }
+//TODO delete this
+TX_STATUS gDbgStatus;
 
 //decide what to do according the cuurent screen, current state etc
 void controllerButtonPressed(const button b)
@@ -548,9 +550,13 @@ void controllerButtonPressed(const button b)
 	modelSetIsContinuousButtonPress(true);
 //	modelReleaseLock();
 
-	TX_STATUS status = tx_timer_activate(&gContinuousButtonPressTimer);
-	int a;
-	a++;
+	gDbgStatus = tx_timer_deactivate(&gContinuousButtonPressTimer);
+	//TODO
+	gDbgStatus++;
+	gDbgStatus = tx_timer_change(&gContinuousButtonPressTimer,KEY_PAD_TIMER_DURATION,0);
+	gDbgStatus++;
+	gDbgStatus = tx_timer_activate(&gContinuousButtonPressTimer);
+	gDbgStatus++;
 
 	modelReleaseLock();
 }
@@ -632,6 +638,18 @@ void sendEditSms()
 	updateModelFields();
 }
 
+//void handleNewNumber(char num)
+//{
+//	if(gInEditContinuosNum >= ID_MAX_LENGTH)
+//	{
+//		inEditSms->recipient_id[gInEditRecipientIdLen-1] = num;
+//	}
+//	else
+//	{
+//		inEditSms->recipient_id[gInEditRecipientIdLen] = num;
+//	}
+//}
+
 void handleNumberScreen(button but)
 {
 	SMS_SUBMIT* inEditSms = modelGetInEditSms();
@@ -653,7 +671,42 @@ void handleNumberScreen(button but)
 		viewSignal();
 		return;
 	case BUTTON_NUMBER_SIGN:
+		gInEditRecipientIdLen--;
+		inEditSms->recipient_id[gInEditRecipientIdLen] = ' ';
+		viewSignal();
 		return;
+
+		//TODO
+//	case BUTTON_1:
+//		handleNewNumber('1');
+//		break;
+//	case BUTTON_2:
+//		handleEditNewChar(gButton2);
+//		break;
+//	case BUTTON_3:
+//		handleEditNewChar(gButton3);
+//		break;
+//	case BUTTON_4:
+//		handleEditNewChar(gButton4);
+//		break;
+//	case BUTTON_5:
+//		handleEditNewChar(gButton5);
+//		break;
+//	case BUTTON_6:
+//		handleEditNewChar(gButton6);
+//		break;
+//	case BUTTON_7:
+//		handleEditNewChar(gButton7);
+//		break;
+//	case BUTTON_8:
+//		handleEditNewChar(gButton8);
+//		break;
+//	case BUTTON_9:
+//		handleEditNewChar(gButton9);
+//		break;
+//	case BUTTON_0:
+//		handleEditNewChar(gButton0);
+//		break;
 	}
 
 	if(gInEditRecipientIdLen == ID_MAX_LENGTH)
@@ -665,6 +718,10 @@ void handleNumberScreen(button but)
 		inEditSms->recipient_id[gInEditRecipientIdLen] = getNumberFromButton(but);
 		gInEditRecipientIdLen++;
 	}
+
+	//update the screen
+	viewSignal();
+
 }
 
 void handleEditNewChar(const char buttonX[])
@@ -681,6 +738,7 @@ void handleEditNewChar(const char buttonX[])
 		inEditSms->data_length++;
 	}
 
+	//update the screen
 	viewSignal();
 }
 

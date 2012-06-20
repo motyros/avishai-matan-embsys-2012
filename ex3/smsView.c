@@ -16,7 +16,7 @@ TX_EVENT_FLAGS_GROUP gLcdIdleEventFlags;
 #define MESSAGE_LISTING_SCREEN_BOTTOM 	"New   Delete"
 #define MESSAGE_DISPLAY_SCREEN_BOTTOM 	"Back  Delete"
 #define MESSAGE_EDIT_SCREEN_BOTTOM    	"Back  Delete"
-#define MESSAGE_NUMBER_SCREEN_BOTTOM	"Back        "
+#define MESSAGE_NUMBER_SCREEN_BOTTOM	"Back  Delete"
 #define BLANK_LINE						"            "
 
 #define INT_TO_CH(n) ((n) + '0')
@@ -345,10 +345,22 @@ void renderMessageEditScreen()
 		}
 
 		//print the last row (add spaces if needed)
-		UINT lastRowLen = pMessage->data_length % SCREEN_WIDTH;
+		UINT lastRowLen;
+		//find the last row length
+		if(pMessage->data_length != 0 && (pMessage->data_length % SCREEN_WIDTH) == 0)
+		{
+			lastRowLen = SCREEN_WIDTH;
+		}
+		else
+		{
+			lastRowLen = pMessage->data_length % SCREEN_WIDTH;
+		}
 		CHAR line[SCREEN_WIDTH];
+		//new line with spaces
 		memset(line,' ',SCREEN_WIDTH);
+		//copy the old line into the new one
 		memcpy(line,pMessage->data + SCREEN_WIDTH*i,lastRowLen);
+		//print to the screen
 		blockingSetLcdLine(i,false,line,SCREEN_WIDTH);
 
 		//if the last button was "delete char" an we moved to the last position at the previouse
@@ -367,7 +379,7 @@ void renderMessageNumberScreen()
 	UINT i;
 
 	//set and display the number currently typed
-	memcpy(line,pMessage->device_id,ID_MAX_LENGTH);
+	memcpy(line,pMessage->recipient_id,ID_MAX_LENGTH);
 	memset(line+ID_MAX_LENGTH,' ',SCREEN_WIDTH-ID_MAX_LENGTH);
 
 	blockingSetLcdLine(0,false,line,SCREEN_WIDTH);
