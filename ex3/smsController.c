@@ -42,6 +42,7 @@ void handleNumberScreen(button but);
 void handleEditScreen(button but);
 void controllerPacketArrived();
 void disableContinuousButtonPress(ULONG v);
+CHAR getNumberFromButton(button but);
 
 
 
@@ -369,9 +370,11 @@ TX_STATUS controllerInit()
 	 *
 	 */
 
+
+        //no need to take any lock since all init are single threaded
 	//try to take the lock
-	status = modelAcquireLock();
-	if(status != TX_SUCCESS) return status;
+	//status = modelAcquireLock();
+	//if(status != TX_SUCCESS) return status;
 
 	modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
 	//update the first sms on screen
@@ -380,7 +383,7 @@ TX_STATUS controllerInit()
 	modelSetSelectedSms(modelGetFirstSms());
 
 	//release the lock
-	modelReleaseLock();
+	//modelReleaseLock();
 
 	//init the network
 	result = networkInit();
