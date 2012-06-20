@@ -100,7 +100,7 @@ void fillTimeStampBuffer(CHAR* buf)
 	//since we are GMT+2, and the units are 15 minutes, we need 4*2 units
 	twoDigitIntToStr(4*2,buf);
 }
-char gBuf[PROBE_MESSAGE_MAX_SIZE];
+
 char gProbeBuf[PROBE_MESSAGE_MAX_SIZE];
 
 /*
@@ -128,7 +128,7 @@ void networkSendThreadMainFunc(ULONG v)
 
 		embsys_fill_probe(gProbeBuf,&gSmsProbe,actualFlag & SEND_PROBE_ACK,&bufLen);
 
-		network_send_packet_start((uint8_t*)gBuf,bufLen,bufLen);
+		network_send_packet_start((uint8_t*)gProbeBuf,bufLen,bufLen);
 	}
 }
 
