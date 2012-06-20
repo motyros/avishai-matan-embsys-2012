@@ -623,7 +623,7 @@ void updateModelFields()
 void sendEditSms()
 {
 	SMS_SUBMIT* smsToSend = modelGetInEditSms();
-	network_send_packet_start(smsToSend->data, smsToSend->data_length,  smsToSend->data_length);
+	network_send_packet_start((uint8_t*)smsToSend->data, smsToSend->data_length,  smsToSend->data_length);
 
 	//add the sms to the linked list
 	modelAddSmsToDb(smsToSend, OUTGOING_MESSAGE);
