@@ -100,7 +100,7 @@ void fillTimeStampBuffer(CHAR* buf)
 	//since we are GMT+2, and the units are 15 minutes, we need 4*2 units
 	twoDigitIntToStr(4*2,buf);
 }
-
+char gBuf[PROBE_MESSAGE_MAX_SIZE];
 char gProbeBuf[PROBE_MESSAGE_MAX_SIZE];
 
 /*
@@ -109,6 +109,7 @@ char gProbeBuf[PROBE_MESSAGE_MAX_SIZE];
 void networkSendPeriodicProbe(ULONG v)
 {
 
+	//get the lock on the var which indicates if we need to ack or just probe
 	//signal the thread to send probe
 	tx_event_flags_set(&gNetworkSendEventFlags,SEND_PROBE,TX_OR);
 }
@@ -127,8 +128,7 @@ void networkSendThreadMainFunc(ULONG v)
 
 		embsys_fill_probe(gProbeBuf,&gSmsProbe,actualFlag & SEND_PROBE_ACK,&bufLen);
 
-		network_send_packet_start((uint8_t*)gProbeBuf,bufLen,bufLen);
-
+		network_send_packet_start((uint8_t*)gBuf,bufLen,bufLen);
 	}
 }
 
@@ -278,6 +278,7 @@ TX_STATUS controllerInit()
 	TX_STATUS status;
 
 
+	/***********create the timers****************/
 	status = tx_timer_create(	&gContinuousButtonPressTimer,
 								"Continuous Button Press Timer",
 								disableContinuousButtonPress,
@@ -285,7 +286,6 @@ TX_STATUS controllerInit()
 								KEY_PAD_TIMER_DURATION,
 								0,
 								TX_NO_ACTIVATE);
-
 	status = tx_timer_create(	&gPeriodicSendTimer,
 								"Periodic send timer",
 								networkSendPeriodicProbe,
@@ -295,6 +295,7 @@ TX_STATUS controllerInit()
 								TX_AUTO_ACTIVATE);
 
 
+	/***********create the threads****************/
 	status = tx_thread_create(	&gKeyPadThread,
 								"Keypad Thread",
 								keyPadThreadMainFunc,
@@ -328,13 +329,14 @@ TX_STATUS controllerInit()
 								TX_NO_TIME_SLICE, TX_AUTO_START
 								);
 
-
+	/***********create the event flags****************/
 	status = tx_event_flags_create(&gKeyPadEventFlags,"Keypad Event Flags");
 
 	status = tx_event_flags_create(&gNetworkReceiveEventFlags,"Network Rec Event Flags");
 
 	status = tx_event_flags_create(&gNetworkSendEventFlags,"Network Send Event Flags");
 
+	/***********create the mutex****************/
 	status = tx_mutex_create(&gProbeAckMutex,"Probe Ack Mutex",TX_INHERIT);
 
 	memcpy(gSmsProbe.device_id,DEVICE_ID,strlen(DEVICE_ID));
@@ -368,16 +370,28 @@ TX_STATUS controllerInit()
 	 *
 	 *
 	 */
+	modelAcquireLock();
 
 	modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
-
+	//update the first sms on screen
 	modelSetFirstSmsOnScreen(modelGetFirstSms());
+	//update the selected sms
 	modelSetSelectedSms(modelGetFirstSms());
+
+	modelReleaseLock();
 
 	networkInit();
 
 	return TX_SUCCESS;
 }
+
+void secureSetFirstSmsOnScreen(const SmsLinkNodePtr pSms)
+{
+	modelAcquireLock();
+	modelSetFirstSmsOnScreen(pSms);
+	modelReleaseLock();
+}
+
 void deleteSmsFromScreen(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSelectedSms)
 {
 	//we are deleting the first sms in the screen
@@ -507,6 +521,7 @@ void handleDisplayScreen(button b)
 //decide what to do according the cuurent screen, current state etc
 void controllerButtonPressed(const button b)
 {
+
 	if (modelAcquireLock() != TX_SUCCESS)
 	{
 		return;
@@ -527,8 +542,12 @@ void controllerButtonPressed(const button b)
 		break;
 	}
 
+//	//secured set the buttons fields
+//	modelAcquireLock();
 	modelSetLastButton(b);
 	modelSetIsContinuousButtonPress(true);
+//	modelReleaseLock();
+
 	TX_STATUS status = tx_timer_activate(&gContinuousButtonPressTimer);
 	int a;
 	a++;
@@ -583,14 +602,34 @@ CHAR getNumberFromButton(button but)
 
 }
 
-void sendSms()
+/*
+ *
+ */
+void updateModelFields()
+{
+//	modelAcquireLock();
+	//if it is the first sms, update the relevant fields
+	if (modelGetSmsDbSize() == 1)
+	{
+		modelSetFirstSmsOnScreen(modelGetFirstSms());
+		modelSetSelectedSms(modelGetFirstSms());
+	}
+//	modelReleaseLock();
+}
+
+/*
+ * send the edited sms
+ */
+void sendEditSms()
 {
 	SMS_SUBMIT* smsToSend = modelGetInEditSms();
-	/*if (modelGetSmsDbSize() == 1)
-		{
-			modelSetFirstSmsOnScreen(modelGetFirstSms());
-			modelSetSelectedSms(modelGetFirstSms());
-		}*/
+	network_send_packet_start(smsToSend->data, smsToSend->data_length,  smsToSend->data_length);
+
+	//add the sms to the linked list
+	modelAddSmsToDb(smsToSend, OUTGOING_MESSAGE);
+
+	//update the relevant fields
+	updateModelFields();
 }
 
 void handleNumberScreen(button but)
@@ -600,9 +639,10 @@ void handleNumberScreen(button but)
 	switch (but)
 	{
 	case BUTTON_OK:
-
-		//TODO: send the sms with network
-		sendSms();
+		sendEditSms();
+		modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
+		viewSetRefreshScreen();
+		viewSignal();
 		return;
 	case BUTTON_STAR:
 		//cancel the message
@@ -740,14 +780,13 @@ void controllerPacketArrived()
 			break;
 		}
 
+		//add the delivered sms to the liked list
 		modelAddSmsToDb(&deliverSms,INCOMMING_MESSAGE);
 
-		if (modelGetSmsDbSize() == 1)
-		{
-			modelSetFirstSmsOnScreen(modelGetFirstSms());
-			modelSetSelectedSms(modelGetFirstSms());
-		}
+		//update the relevant fields
+		updateModelFields();
 
+		//release the lock
 		modelReleaseLock();
 
 		//copy the sender id, for the probe ack
