@@ -159,12 +159,12 @@ void viewSignal()
 	tx_event_flags_set(&gGuiRefershEventFlags,1,TX_OR);
 }
 
-void blockingSetLcdLine(uint8_t row_number, bool selected, char const line[], uint8_t length)
+/*void blockingSetLcdLine(uint8_t row_number, bool selected, char const line[], uint8_t length)
 {
 	ULONG actualFlag;
 	lcd_set_row(row_number,selected,line,length);
 	tx_event_flags_get(&gLcdIdleEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
-}
+}*/
 
 
 /*
@@ -203,9 +203,15 @@ void setMessageListingLineInfo(SmsLinkNodePtr pSms,int serialNumber,CHAR* pLine)
 	else
 	{
 		pOutSms = (SMS_SUBMIT*)pSms->pSMS;
-		for(i = 0 ; i < ID_MAX_LENGTH ; ++i)
+
+		for(i = 0 ; (pOutSms->recipient_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
 		{
-			*pLine++ = pOutSms->device_id[i];
+			*pLine++ = pOutSms->recipient_id[i];
+		}
+
+		for(;i<ID_MAX_LENGTH ; ++i)
+		{
+			*pLine++ = ' ';
 		}
 		*pLine++ = 'O';
 	}
@@ -224,8 +230,11 @@ void renderMessageListingScreen()
 	//get the selected message
 	pSelectedMessage = modelGetSelectedSms();
 
-	//get the serial number of the first message
-	smsSerialNumber = modelGetSmsSerialNumber(pMessage);
+	if (pSelectedMessage != NULL)
+	{
+		//get the serial number of the first message
+		smsSerialNumber = modelGetSmsSerialNumber(pMessage);
+	}
 
 
 	//cehck if we need to render the whole screen
@@ -239,15 +248,19 @@ void renderMessageListingScreen()
 			//if we reached the end of the messages, just print blank lines
 			if (!pMessage)
 			{
-				blockingSetLcdLine(i,false,BLANK_LINE,SCREEN_WIDTH);
+				lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
 			}
 			else
 			{
+				if (pMessage == modelGetFirstSms())
+				{
+					smsSerialNumber = 0;
+				}
 				//prepare the line to print
-				setMessageListingLineInfo(pMessage,smsSerialNumber+i,line);
+				setMessageListingLineInfo(pMessage,smsSerialNumber,line);
 
 				//print the line
-				blockingSetLcdLine(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
+				lcd_set_row_without_flush(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
 
 				if (pMessage==pSelectedMessage)
 				{
@@ -265,6 +278,8 @@ void renderMessageListingScreen()
 					pMessage = NULL;
 				}
 
+				smsSerialNumber++;
+
 
 			}
 
@@ -272,7 +287,7 @@ void renderMessageListingScreen()
 		}
 
 		//print the bottom of the screen
-		blockingSetLcdLine(SCREEN_HEIGHT-1,true,MESSAGE_LISTING_SCREEN_BOTTOM,SCREEN_WIDTH);
+		lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_LISTING_SCREEN_BOTTOM,SCREEN_WIDTH);
 
 		gViewRefreshScreen = false;
 	}
@@ -294,25 +309,28 @@ void renderMessageListingScreen()
 		{
 
 			gSelectedLineIndex--;
-			setMessageListingLineInfo(pMessage->pNext,smsSerialNumber+i+1,line);
-			blockingSetLcdLine(i+1,false,line,SCREEN_WIDTH);
+			setMessageListingLineInfo(pMessage->pNext,(smsSerialNumber+i+1) % modelGetSmsDbSize(),line);
+			lcd_set_row_without_flush(i+1,false,line,SCREEN_WIDTH);
 
 		}
 		//down button - print the message before the selected message
 		else
 		{
 			gSelectedLineIndex++;
-			setMessageListingLineInfo(pMessage->pPrev,smsSerialNumber+i-1,line);
-			blockingSetLcdLine(i-1,false,line,SCREEN_WIDTH);
+			setMessageListingLineInfo(pMessage->pPrev,(smsSerialNumber+i-1) % modelGetSmsDbSize(),line);
+			lcd_set_row_without_flush(i-1,false,line,SCREEN_WIDTH);
 		}
 		//any other case will be considered as "refresh screen" (message deletion and message receive)
 
 
 		//print the selected message
-		setMessageListingLineInfo(pMessage,smsSerialNumber+i,line);
+		setMessageListingLineInfo(pMessage,(smsSerialNumber+i) % modelGetSmsDbSize(),line);
+
 		//print the line
-		blockingSetLcdLine(i,true,line,SCREEN_WIDTH);
+		lcd_set_row_without_flush(i,true,line,SCREEN_WIDTH);
 	}
+
+	lcd_flush();
 }
 
 void renderMessageEditScreen()
@@ -323,10 +341,10 @@ void renderMessageEditScreen()
 		//clear the whole screen
 		for(i = 0 ; i < SCREEN_HEIGHT-1 ; ++i)
 		{
-			blockingSetLcdLine(i,false,BLANK_LINE,SCREEN_WIDTH);
+			lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
 		}
 		//display the bottom line
-		blockingSetLcdLine(SCREEN_HEIGHT-1,true,MESSAGE_EDIT_SCREEN_BOTTOM,SCREEN_WIDTH);
+		lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_EDIT_SCREEN_BOTTOM,SCREEN_WIDTH);
 
 		gViewRefreshScreen = false;
 	}
@@ -361,15 +379,17 @@ void renderMessageEditScreen()
 		//copy the old line into the new one
 		memcpy(line,pMessage->data + SCREEN_WIDTH*i,lastRowLen);
 		//print to the screen
-		blockingSetLcdLine(i,false,line,SCREEN_WIDTH);
+		lcd_set_row_without_flush(i,false,line,SCREEN_WIDTH);
 
 		//if the last button was "delete char" an we moved to the last position at the previouse
 		//line, we should clear the next line from the one char it still has
 		if (lastRowLen == SCREEN_WIDTH && modelGetLastButton() == BUTTON_NUMBER_SIGN)
 		{
-			blockingSetLcdLine(i+1,false,BLANK_LINE,SCREEN_WIDTH);
+			lcd_set_row_without_flush(i+1,false,BLANK_LINE,SCREEN_WIDTH);
 		}
 	}
+
+	lcd_flush();
 }
 
 void renderMessageNumberScreen()
@@ -378,25 +398,42 @@ void renderMessageNumberScreen()
 	CHAR line[SCREEN_WIDTH];
 	UINT i;
 
-	//set and display the number currently typed
-	memcpy(line,pMessage->recipient_id,ID_MAX_LENGTH);
-	memset(line+ID_MAX_LENGTH,' ',SCREEN_WIDTH-ID_MAX_LENGTH);
+	for(i = 0 ; (i < ID_MAX_LENGTH) && (pMessage->recipient_id[i] != (char)NULL) ; ++i)
+	{
+		line[i] = pMessage->recipient_id[i];
+	}
 
-	blockingSetLcdLine(0,false,line,SCREEN_WIDTH);
+	memset(line+i,' ',SCREEN_WIDTH-i);
+
+	lcd_set_row_without_flush(0,false,line,SCREEN_WIDTH);
 
 	//in case of refresh, clear the rest of the screen and draw the bottom line
 	if (gViewRefreshScreen)
 	{
 		for(i = 1 ; i < SCREEN_WIDTH-1 ; ++i)
 		{
-			blockingSetLcdLine(i,false,BLANK_LINE,SCREEN_WIDTH);
+			lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
 		}
-		blockingSetLcdLine(SCREEN_HEIGHT-1,true,MESSAGE_NUMBER_SCREEN_BOTTOM,SCREEN_WIDTH);
+		lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_NUMBER_SCREEN_BOTTOM,SCREEN_WIDTH);
 
 		gViewRefreshScreen = false;
 	}
+
+	lcd_flush();
 }
 
+void setTimeFromTimeStamp(char* pLine,char* pTimeStamp)
+{
+	pLine[0]=pTimeStamp[7];
+	pLine[1]=pTimeStamp[6];
+	pLine[2]=':';
+	pLine[3]=pTimeStamp[9];
+	pLine[4]=pTimeStamp[8];
+	pLine[5]=':';
+	pLine[6]=pTimeStamp[11];
+	pLine[7]=pTimeStamp[10];
+
+}
 void renderMessageDisplayScreen()
 {
 	//since the whole message fits the screen, the only option to render this screen
@@ -409,41 +446,67 @@ void renderMessageDisplayScreen()
 		UINT dataLength;
 		CHAR* pMessageBuffer;
 		CHAR line[SCREEN_WIDTH];
-
+		INT i;
 		memset(line,' ',SCREEN_WIDTH);
 
 		if (pMessage->type == INCOMMING_MESSAGE)
 		{
+
 			SMS_DELIVER* pInMsg = (SMS_DELIVER*)pMessage->pSMS;
+
+			setTimeFromTimeStamp(line,pInMsg->timestamp);
+
+			lcd_set_row_without_flush(1,true,line,SCREEN_WIDTH);
+
+			memset(line,' ',SCREEN_WIDTH);
+
 
 			dataLength =pInMsg->data_length;
 			pMessageBuffer =pInMsg->data;
-			memcpy(line,"F:",2);
-			memcpy(line+2,pInMsg->sender_id,ID_MAX_LENGTH);
+
+			for(i = 0 ; (pInMsg->sender_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
+			{
+				line[i] = pInMsg->sender_id[i];
+			}
+
+			for(;i<ID_MAX_LENGTH ; ++i)
+			{
+				line[i] = ' ';
+			}
+
+			//memcpy(line,pInMsg->sender_id,ID_MAX_LENGTH);
 		}
 		else
 		{
+			lcd_set_row_without_flush(1,false,line,SCREEN_WIDTH);
+
 			SMS_SUBMIT* pOutMsg = (SMS_SUBMIT*)pMessage->pSMS;
 			dataLength =pOutMsg->data_length;
 			pMessageBuffer =pOutMsg->data;
-			memcpy(line,"T:",2);
-			memcpy(line+2,pOutMsg->recipient_id,ID_MAX_LENGTH);
+			for(i = 0 ; (pOutMsg->recipient_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
+			{
+				line[i] = pOutMsg->recipient_id[i];
+			}
+
+			for(;i<ID_MAX_LENGTH ; ++i)
+			{
+				line[i] = ' ';
+			}
+			//memcpy(line,pOutMsg->recipient_id,ID_MAX_LENGTH);
 		}
 
-		blockingSetLcdLine(0,true,line,SCREEN_WIDTH);
+		lcd_set_row_without_flush(0,true,line,SCREEN_WIDTH);
 
-		//should print timestamp
-		blockingSetLcdLine(1,true,BLANK_LINE,SCREEN_WIDTH);
 
 		UINT fullLines = dataLength/SCREEN_WIDTH;
-		UINT i,lineIndex;
+		UINT lineIndex;
 
 
 
 		//print message lines that takes full line
 		for(i = 0,lineIndex=2 ; i < fullLines ; ++i,++lineIndex)
 		{
-			blockingSetLcdLine(lineIndex,false,pMessageBuffer,SCREEN_WIDTH);
+			lcd_set_row_without_flush(lineIndex,false,pMessageBuffer,SCREEN_WIDTH);
 			pMessageBuffer+=SCREEN_WIDTH;
 		}
 
@@ -454,20 +517,22 @@ void renderMessageDisplayScreen()
 		{
 			memset(line,' ',SCREEN_WIDTH);
 			memcpy(line,pMessageBuffer,charsRemain);
-			blockingSetLcdLine(lineIndex++,false,line,SCREEN_WIDTH);
+			lcd_set_row_without_flush(lineIndex++,false,line,SCREEN_WIDTH);
 		}
 
 		//print an empty lines until the end of the screen
 		for(;lineIndex<SCREEN_HEIGHT-1;++lineIndex)
 		{
-			blockingSetLcdLine(lineIndex,false,BLANK_LINE,SCREEN_WIDTH);
+			lcd_set_row_without_flush(lineIndex,false,BLANK_LINE,SCREEN_WIDTH);
 		}
 
 		//print the
-		blockingSetLcdLine(SCREEN_HEIGHT-1,true,MESSAGE_DISPLAY_SCREEN_BOTTOM,SCREEN_WIDTH);
+		lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_DISPLAY_SCREEN_BOTTOM,SCREEN_WIDTH);
 
 		gViewRefreshScreen = false;
 	}
+
+	lcd_flush();
 }
 
 void viewRefresh()
@@ -504,6 +569,6 @@ bool viewIsFirstRowSelected()
 
 bool viewIsLastRowSelected()
 {
-	return (gSelectedLineIndex+1 == modelGetSmsDbSize())|| (gSelectedLineIndex==(SCREEN_HEIGHT-1));
+	return (gSelectedLineIndex+1 == modelGetSmsDbSize())|| (gSelectedLineIndex+1==(SCREEN_HEIGHT-1));
 }
 

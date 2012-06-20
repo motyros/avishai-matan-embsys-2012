@@ -56,7 +56,8 @@ result_t lcd_init(void (*flush_complete_cb)(void))
     return OPERATION_SUCCESS;
 }
 
-result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8_t length)
+
+result_t lcd_set_row_without_flush(uint8_t row_number, bool selected, char const line[], uint8_t length)
 {
 	uint8_t i,bitSelected=0;
 	if(!line)
@@ -96,6 +97,11 @@ result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8
 		gLcdData[rowBytesOffset+i].byte.selected = bitSelected;
 	}
 
+	return OPERATION_SUCCESS;
+}
+
+void lcd_flush()
+{
 	//write the LCD data address to the DBUF register
 	_sr((uint32_t)&gLcdData,LCD_DBUF_ADDR);
 
@@ -104,8 +110,22 @@ result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8
 
 	//start writing to the LCD display
 	_sr(BIT0,LCD_DCMD_ADDR);
+}
 
-	return OPERATION_SUCCESS;
+
+result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8_t length)
+{
+	result_t status = lcd_set_row_without_flush(row_number,selected,line,length);
+
+	if (status == OPERATION_SUCCESS)
+	{
+		lcd_flush();
+	}
+
+	return status;
+
+
+
 }
 
 void lcdDisplayISR()
@@ -117,6 +137,7 @@ void lcdDisplayISR()
 	//call the CB function
 	gpFlushCompleteCB();
 }
+
 
 
 

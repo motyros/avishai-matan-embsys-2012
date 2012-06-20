@@ -95,6 +95,8 @@ UINT modelInit()
                 return status;
         }
 
+        memset(&gInEditSms,0,sizeof(SMS_SUBMIT));
+
         //init the list to empty
         gSmsDb.pHead = NULL;
         gSmsDb.pTail = NULL;
@@ -104,7 +106,7 @@ UINT modelInit()
         d.data[0] = 'a';
         d.data_length = 1;
         memcpy(d.sender_id,"12345678",8);
-        memcpy(d.timestamp,"02062011390508",8);
+        memcpy(d.timestamp,"02062011390508",14);
         int i;
         for(i = 0 ; i < 20 ; ++i)
         {
@@ -325,12 +327,20 @@ int modelGetSmsSerialNumber(const SmsLinkNodePtr pSms)
         //if the pointer points to the start of the list
         /* note: this check is needed, because the loop, later in this method, does not 
          * checks the head - in case the list has only one node.*/
+        SmsLinkNodePtr pNode = gSmsDb.pHead;
+
+        for(;serialNum < gSmsDb.size ; ++serialNum,pNode = pNode->pNext)
+        {
+        	if(pNode == pSms) return serialNum;
+        }
+
+/*
         if(pSms == gSmsDb.pHead)
         {
                 return serialNum;
         }
         
-        SmsLinkNodePtr pNode;
+
         //go over the list to indicate the serial number
         //note: it is a cyclic list, so the loop will finish
         for(pNode = gSmsDb.pHead ; pNode->pNext != gSmsDb.pHead ; pNode = pNode->pNext)
@@ -338,7 +348,7 @@ int modelGetSmsSerialNumber(const SmsLinkNodePtr pSms)
                 if(pNode == pSms) return serialNum;
                 ++serialNum;
         }
-                
+  */
         //if the sms pointer was not found
         return -1;        
 }

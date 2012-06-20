@@ -49,4 +49,8 @@ result_t lcd_init(void (*flush_complete_cb)(void));
  ***********************************************************************/
 result_t lcd_set_row(uint8_t row_number, bool selected, char const line[], uint8_t length);
 
+result_t lcd_set_row_without_flush(uint8_t row_number, bool selected, char const line[], uint8_t length);
+
+void lcd_flush();
+
 #endif /* LCD_H_ */

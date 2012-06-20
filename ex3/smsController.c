@@ -401,16 +401,29 @@ void deleteSmsFromScreen(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSe
 		if (modelGetSmsDbSize() == 1)
 		{
 			modelSetFirstSmsOnScreen(NULL);
+			modelSetSelectedSms(NULL);
 		}
 		else
 		{
 			modelSetFirstSmsOnScreen(pFirstSms->pNext);
 		}
 	}
-	else
+
+	//do it only if after the delete db is not empty
+	if (modelGetSmsDbSize() > 1)
 	{
-		modelSetFirstSmsOnScreen(pFirstSms->pNext);
+		modelSetSelectedSms(pSelectedSms->pNext);
 	}
+//	else
+//	{
+//		modelSetFirstSmsOnScreen(pFirstSms->pNext);
+//	}
+}
+
+void deleteSms(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSelectedSms)
+{
+	deleteSmsFromScreen(pFirstSms,pSelectedSms);
+	modelRemoveSmsFromDb(pSelectedSms);
 }
 
 void handleListingScreen(button b)
@@ -427,7 +440,7 @@ void handleListingScreen(button b)
 	case BUTTON_2: //up
 
 		//there are no messages to display
-		if (pFirstSms == NULL)
+		if (pSelectedSms == NULL)
 		{
 			break;
 		}
@@ -450,7 +463,7 @@ void handleListingScreen(button b)
 		break;
 	case BUTTON_8: //down
 		//there are no message to display
-		if (pFirstSms == NULL)
+		if (pSelectedSms == NULL)
 		{
 			break;
 		}
@@ -467,6 +480,7 @@ void handleListingScreen(button b)
 		break;
 
 	case BUTTON_STAR: //enter new message screen
+		//TODO erase all fields of inEditSms
 		//if we don't have room for new sms, don't let write new one
 		if (modelGetSmsDbSize() == MAX_NUM_SMS)
 		{
@@ -477,9 +491,13 @@ void handleListingScreen(button b)
 		refreshView = true;
 		break;
 	case BUTTON_NUMBER_SIGN: //delete message
-		deleteSmsFromScreen(pFirstSms,pSelectedSms);
-		modelRemoveSmsFromDb(pSelectedSms);
+		if (pSelectedSms == NULL) //no message to delete
+		{
+			break;
+		}
+		deleteSms(pFirstSms,pSelectedSms);
 		viewSetRefreshScreen();
+		refreshView = true;
 		break;
 	case BUTTON_OK: //display message
 		modelSetCurrentScreenType(MESSAGE_DISPLAY_SCREEN);
@@ -499,22 +517,30 @@ void handleListingScreen(button b)
 
 void handleDisplayScreen(button b)
 {
+	bool needToRefershGui = false;
 	switch (b)
 	{
 	case BUTTON_STAR: //go back to sms listing screen
 		modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
+		needToRefershGui = true;
 		break;
 	case BUTTON_NUMBER_SIGN: //delete current sms
+		modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
 		SmsLinkNodePtr pSelectedSms = modelGetSelectedSms();
 		SmsLinkNodePtr pFirstSms = modelGetFirstSmsOnScreen();
 
-		deleteSmsFromScreen(pFirstSms,pSelectedSms);
-		modelRemoveSmsFromDb(pSelectedSms);
+		deleteSms(pFirstSms,pSelectedSms);
+		//deleteSmsFromScreen(pFirstSms,pSelectedSms);
+		//modelRemoveSmsFromDb(pSelectedSms);
+		needToRefershGui = true;
 		break;
-	default: return;
 	}
 
-	viewSetRefreshScreen();
+	if (needToRefershGui)
+	{
+		viewSetRefreshScreen();
+		viewSignal();
+	}
 
 }
 //TODO delete this
@@ -623,13 +649,21 @@ void updateModelFields()
 //	modelReleaseLock();
 }
 
+char gSendBuf[NETWORK_MAXIMUM_TRANSMISSION_UNIT];
+
 /*
  * send the edited sms
  */
 void sendEditSms()
 {
 	SMS_SUBMIT* smsToSend = modelGetInEditSms();
-	network_send_packet_start((uint8_t*)smsToSend->data, smsToSend->data_length,  smsToSend->data_length);
+	unsigned dataLen;
+	memset(smsToSend->device_id,0,ID_MAX_LENGTH);
+	memcpy(smsToSend->device_id,DEVICE_ID,strlen(DEVICE_ID));
+	//TODO make sure device_id and rec id will be zeroed before working with them
+	embsys_fill_submit(gSendBuf,smsToSend,&dataLen);
+
+	network_send_packet_start((uint8_t*)gSendBuf,dataLen,dataLen);
 
 	//add the sms to the linked list
 	modelAddSmsToDb(smsToSend, OUTGOING_MESSAGE);
@@ -671,6 +705,11 @@ void handleNumberScreen(button but)
 		viewSignal();
 		return;
 	case BUTTON_NUMBER_SIGN:
+		if (gInEditRecipientIdLen == 0)
+		{
+			return;
+		}
+
 		gInEditRecipientIdLen--;
 		inEditSms->recipient_id[gInEditRecipientIdLen] = ' ';
 		viewSignal();
@@ -758,7 +797,7 @@ void handleEditScreen(button but)
 	case BUTTON_OK:
 		gInEditRecipientIdLen = 0;
 		//clean the recipient_id
-		memset(inEditSms->recipient_id ,' ', ID_MAX_LENGTH);
+		memset(inEditSms->recipient_id ,0, ID_MAX_LENGTH);
 		modelSetCurrentScreenType(MESSAGE_NUMBER_SCREEN);
 		viewSetRefreshScreen();
 		viewSignal();
@@ -774,8 +813,8 @@ void handleEditScreen(button but)
 		if(inEditSms->data_length > 0)
 		{
 			inEditSms->data_length--;
+			viewSignal();
 		}
-		viewSignal();
 		break;
 	case BUTTON_1:
 		handleEditNewChar(gButton1);
