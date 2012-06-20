@@ -18,7 +18,7 @@
 #define NETWORK_SEND_THREAD_STACK_SIZE (1024)
 
 #define KEY_PAD_PRIORITY (1)
-#define NETWORK_PRIORITY (0)
+#define NETWORK_PRIORITY (1)
 #define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
 
 typedef enum
@@ -401,8 +401,12 @@ void deleteSmsFromScreen(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSe
 
 void handleListingScreen(button b)
 {
+	//modelAcquireLock();
+
 	SmsLinkNodePtr pSelectedSms = modelGetSelectedSms();
 	SmsLinkNodePtr pFirstSms = modelGetFirstSmsOnScreen();
+
+	bool refreshView = false;
 
 	switch (b)
 	{
@@ -411,7 +415,7 @@ void handleListingScreen(button b)
 		//there are no messages to display
 		if (pFirstSms == NULL)
 		{
-			return;
+			break;
 		}
 
 		/* if first row is selected and we are moving up:
@@ -428,12 +432,13 @@ void handleListingScreen(button b)
 			viewSetRefreshScreen();
 		}
 		modelSetSelectedSms(pSelectedSms->pPrev);
+		refreshView = true;
 		break;
 	case BUTTON_8: //down
 		//there are no message to display
 		if (pFirstSms == NULL)
 		{
-			return;
+			break;
 		}
 		if (viewIsLastRowSelected())
 		{
@@ -444,6 +449,7 @@ void handleListingScreen(button b)
 			viewSetRefreshScreen();
 		}
 		modelSetSelectedSms(pSelectedSms->pNext);
+		refreshView = true;
 		break;
 
 	case BUTTON_STAR: //enter new message screen
@@ -454,6 +460,7 @@ void handleListingScreen(button b)
 		}
 		modelSetCurrentScreenType(MESSAGE_EDIT_SCREEN);
 		viewSetRefreshScreen();
+		refreshView = true;
 		break;
 	case BUTTON_NUMBER_SIGN: //delete message
 		deleteSmsFromScreen(pFirstSms,pSelectedSms);
@@ -463,12 +470,16 @@ void handleListingScreen(button b)
 	case BUTTON_OK: //display message
 		modelSetCurrentScreenType(MESSAGE_DISPLAY_SCREEN);
 		viewSetRefreshScreen();
+		refreshView = true;
 		break;
-	default: return;
 	}
 
+	//modelReleaseLock();
 	//signal the view to refresh itself
-	viewSignal();
+	if (refreshView)
+	{
+		viewSignal();
+	}
 
 }
 
@@ -496,6 +507,10 @@ void handleDisplayScreen(button b)
 //decide what to do according the cuurent screen, current state etc
 void controllerButtonPressed(const button b)
 {
+	if (modelAcquireLock() != TX_SUCCESS)
+	{
+		return;
+	}
 	switch (modelGetCurentScreenType())
 	{
 	case MESSAGE_DISPLAY_SCREEN:
@@ -517,6 +532,8 @@ void controllerButtonPressed(const button b)
 	TX_STATUS status = tx_timer_activate(&gContinuousButtonPressTimer);
 	int a;
 	a++;
+
+	modelReleaseLock();
 }
 
 CHAR getNumberFromButton(button but)

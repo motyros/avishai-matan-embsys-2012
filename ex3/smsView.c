@@ -22,7 +22,7 @@ TX_EVENT_FLAGS_GROUP gLcdIdleEventFlags;
 #define INT_TO_CH(n) ((n) + '0')
 
 #define GUI_THREAD_STACK_SIZE 1024
-#define GUI_THREAD_PRIORITY 1
+#define GUI_THREAD_PRIORITY 0
 
 char gGuiThreadStack[GUI_THREAD_STACK_SIZE];
 
@@ -249,6 +249,12 @@ void renderMessageListingScreen()
 				//print the line
 				blockingSetLcdLine(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
 
+				if (pMessage==pSelectedMessage)
+				{
+						gSelectedLineIndex = i;
+						gPrevSelectedLineIndex = i;
+				}
+
 				pMessage = pMessage->pNext;
 
 				//since this is a cyclic list, need to rule out the case when
@@ -259,11 +265,7 @@ void renderMessageListingScreen()
 					pMessage = NULL;
 				}
 
-				if (pMessage==pSelectedMessage)
-				{
-					gSelectedLineIndex = i;
-					gPrevSelectedLineIndex = i;
-				}
+
 			}
 
 

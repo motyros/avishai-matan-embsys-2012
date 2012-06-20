@@ -100,6 +100,19 @@ UINT modelInit()
         gSmsDb.pTail = NULL;
         gSmsDb.size = 0;
 
+        SMS_DELIVER d;
+        d.data[0] = 'a';
+        d.data_length = 1;
+        memcpy(d.sender_id,"12345678",8);
+        memcpy(d.timestamp,"02062011390508",8);
+        int i;
+        for(i = 0 ; i < 20 ; ++i)
+        {
+        	modelAddSmsToDb(&d,INCOMMING_MESSAGE);
+        }
+        gpSelectedSms = modelGetFirstSms();
+        gpFirstSmsOnScreen = modelGetFirstSms();
+
         return TX_SUCCESS;
 
 }

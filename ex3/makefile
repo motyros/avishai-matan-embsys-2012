@@ -38,6 +38,7 @@ tar:
 
 clean: 
 	rm -f avishl02_matanp01 a.out *.o
+	svn revert embsys_sms_protocol.o
 
 test: clean all tar
 	~embsys/ARC/MetaWare/arc/bin/embsys_check_ex2.sh avishl02_matanp01
