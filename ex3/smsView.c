@@ -32,6 +32,7 @@ TX_THREAD gGuiThread;
 bool gViewRefreshScreen = true;
 
 INT gSelectedLineIndex = 0;
+INT gPrevSelectedLineIndex = 0;
 /*
  * FWD declaration of functions
  */
@@ -257,12 +258,15 @@ void renderMessageListingScreen()
 				{
 					pMessage = NULL;
 				}
+
+				if (pMessage==pSelectedMessage)
+				{
+					gSelectedLineIndex = i;
+					gPrevSelectedLineIndex = i;
+				}
 			}
 
-			if (pMessage==pSelectedMessage)
-			{
-				gSelectedLineIndex = i;
-			}
+
 		}
 
 		//print the bottom of the screen
@@ -275,9 +279,10 @@ void renderMessageListingScreen()
 	{
 		//find the offset of the selected message, this is also the line of the selected message
 		i = 0;
-		while(pMessage++ != pSelectedMessage)
+		while(pMessage != pSelectedMessage)
 		{
 			i++;
+			pMessage = pMessage->pNext;
 		}
 
 		/* check what was the last button been pressed*/
@@ -285,6 +290,7 @@ void renderMessageListingScreen()
 		//up button - print the message after the selected message
 		if (modelGetLastButton() == BUTTON_2)
 		{
+
 			gSelectedLineIndex--;
 			setMessageListingLineInfo(pMessage->pNext,smsSerialNumber+i+1,line);
 			blockingSetLcdLine(i+1,false,line,SCREEN_WIDTH);
@@ -484,6 +490,6 @@ bool viewIsFirstRowSelected()
 
 bool viewIsLastRowSelected()
 {
-	return gSelectedLineIndex==(SCREEN_HEIGHT-1);
+	return (gSelectedLineIndex+1 == modelGetSmsDbSize())|| (gSelectedLineIndex==(SCREEN_HEIGHT-1));
 }
 

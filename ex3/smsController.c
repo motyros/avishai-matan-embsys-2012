@@ -187,7 +187,7 @@ void networkReceiveThreadMainFun(ULONG v)
 		//handle the packet that arrived
 		controllerPacketArrived();
 
-		tx_timer_activate(gPeriodicSendTimer);
+		tx_timer_activate(&gPeriodicSendTimer);
 	}
 }
 void disableContinuousButtonPress(ULONG v)
@@ -740,7 +740,7 @@ void controllerPacketArrived()
 		//gNeedToAckDeliverCounter = true;
 
 		//signal the send thread to send probe akc
-		tx_event_flags_set(&gNetworkSendEventFlags,SEND_PROBE_ACK,TX_AND);
+		tx_event_flags_set(&gNetworkSendEventFlags,SEND_PROBE_ACK,TX_OR);
 
 		//in case the screen is on the message listing, refresh the screen
 		if(modelGetCurentScreenType() == MESSAGE_LISTING_SCREEN)

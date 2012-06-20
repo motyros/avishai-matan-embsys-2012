@@ -308,7 +308,7 @@ int modelGetSmsSerialNumber(const SmsLinkNodePtr pSms)
         DBG_ASSERT(gSmsDb.size > 0);
         
         //start the serial number from 1
-        int serialNum = 1;
+        int serialNum = 0;
         //if the pointer points to the start of the list
         /* note: this check is needed, because the loop, later in this method, does not 
          * checks the head - in case the list has only one node.*/
@@ -369,12 +369,12 @@ UINT modelGetSmsDbSize()
 
 TX_STATUS modelAcquireLock()
 {
-        return tx_mutex_get(&gModelMutex,TX_WAIT_FOREVER);
+    return tx_mutex_get(&gModelMutex,TX_WAIT_FOREVER);
 }
 
 TX_STATUS modelReleaseLock()
 {
-        return tx_mutex_put(&gModelMutex);
+	return tx_mutex_put(&gModelMutex);
 }
 
 
