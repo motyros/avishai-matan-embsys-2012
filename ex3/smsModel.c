@@ -102,7 +102,7 @@ UINT modelInit()
         gSmsDb.pTail = NULL;
         gSmsDb.size = 0;
 
-        SMS_DELIVER d;
+        /*SMS_DELIVER d;
         d.data[0] = 'a';
         d.data_length = 1;
         memcpy(d.sender_id,"12345678",8);
@@ -114,7 +114,7 @@ UINT modelInit()
         }
         gpSelectedSms = modelGetFirstSms();
         gpFirstSmsOnScreen = modelGetFirstSms();
-
+        */
         return TX_SUCCESS;
 
 }

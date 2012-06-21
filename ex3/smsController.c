@@ -7,7 +7,7 @@
 #include "timer/timer.h"
 #include "time.h"
 #include "common_defs.h"
-
+#include "embsys_sms_protocol_mine.h"
 
 ////////////////////////////////////////////////////////////////////
 ///////////////////// Defines & Declaration ////////////////////////
@@ -61,6 +61,7 @@ void handleEditScreen(button but);
 void controllerPacketArrived();
 void continuousButtonPressTimerCB(ULONG v);
 CHAR getNumberFromButton(button but);
+void deleteSmsFromScreen(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSelectedSms);
 
 
 ////////////////////////////////////////////////////////////////////
@@ -518,7 +519,6 @@ void networkSendThreadMainFunc(ULONG v)
                 UINT bufLen = 0;
 
                 embsys_fill_probe(gProbeBuf,&gSmsProbe,actualFlag & SEND_PROBE_ACK,&bufLen);
-
                 network_send_packet_start((uint8_t*)gProbeBuf,bufLen,bufLen);
         }
 }

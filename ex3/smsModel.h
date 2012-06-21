@@ -6,7 +6,7 @@
 #include "common_defs.h"
 #include "TX/tx_api.h"
 #include "input_panel/input_panel.h"
-#include "embsys_sms_protocol.h"
+#include "embsys_sms_protocol_mine.h"
 
 typedef enum
 {
