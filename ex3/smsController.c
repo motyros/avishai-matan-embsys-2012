@@ -705,7 +705,6 @@ void handleListingScreen(button b)
                         {
                                 modelSetFirstSmsOnScreen(pFirstSms->pPrev);
                         }
-                        viewSetRefreshScreen();
                 }
                 modelSetSelectedSms(pSelectedSms->pPrev);
                 refreshView = true;
@@ -722,7 +721,6 @@ void handleListingScreen(button b)
                         {
                                 modelSetFirstSmsOnScreen(pFirstSms->pNext);
                         }
-                        viewSetRefreshScreen();
                 }
                 modelSetSelectedSms(pSelectedSms->pNext);
                 refreshView = true;
