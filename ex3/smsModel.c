@@ -102,6 +102,7 @@ UINT modelInit()
         gSmsDb.pTail = NULL;
         gSmsDb.size = 0;
 
+        //TODO - remove this
         /*SMS_DELIVER d;
         d.data[0] = 'a';
         d.data_length = 1;

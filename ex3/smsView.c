@@ -46,11 +46,15 @@ void lcdDone();
 void guiThreadMainLoopFunc(ULONG v)
 {
 	ULONG actualFlag;
-
+        viewRefresh();
 	while(true)
 	{
-		viewRefresh();
+
+            //wait until LCD is idle
+            tx_event_flags_get(&gLcdIdleEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+            //wait until someone signals the GUI to refresh the screen
 		tx_event_flags_get(&gGuiRefershEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+                viewRefresh();
 	}
 }
 
@@ -159,13 +163,6 @@ void viewSignal()
 	tx_event_flags_set(&gGuiRefershEventFlags,1,TX_OR);
 }
 
-/*void blockingSetLcdLine(uint8_t row_number, bool selected, char const line[], uint8_t length)
-{
-	ULONG actualFlag;
-	lcd_set_row(row_number,selected,line,length);
-	tx_event_flags_get(&gLcdIdleEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
-}*/
-
 
 /*
  *  this function gets an sms message from our DB, serial number and line buffer
@@ -238,97 +235,58 @@ void renderMessageListingScreen()
 
 
 	//cehck if we need to render the whole screen
-	if (gViewRefreshScreen)
-	{
-		SmsLinkNodePtr firstMsg = pMessage;
-
-		//render every line
-		for(i = 0 ; i < SCREEN_HEIGHT-1 ; ++i)
-		{
-			//if we reached the end of the messages, just print blank lines
-			if (!pMessage)
-			{
-				lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
-			}
-			else
-			{
-				if (pMessage == modelGetFirstSms())
-				{
-					smsSerialNumber = 0;
-				}
-				//prepare the line to print
-				setMessageListingLineInfo(pMessage,smsSerialNumber,line);
-
-				//print the line
-				lcd_set_row_without_flush(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
-
-				if (pMessage==pSelectedMessage)
-				{
-						gSelectedLineIndex = i;
-						gPrevSelectedLineIndex = i;
-				}
-
-				pMessage = pMessage->pNext;
-
-				//since this is a cyclic list, need to rule out the case when
-				//not all message fits the screen and we don't want to print the first
-				//message again
-				if (pMessage == firstMsg)
-				{
-					pMessage = NULL;
-				}
-
-				smsSerialNumber++;
 
 
-			}
+        SmsLinkNodePtr firstMsg = pMessage;
+
+        //render every line
+        for(i = 0 ; i < SCREEN_HEIGHT-1 ; ++i)
+        {
+            //if we reached the end of the messages, just print blank lines
+            if (!pMessage)
+            {
+                lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
+            }
+            else
+            {
+                if (pMessage == modelGetFirstSms())
+                {
+                    smsSerialNumber = 0;
+                }
+                //prepare the line to print
+                setMessageListingLineInfo(pMessage,smsSerialNumber,line);
+                
+                //print the line
+                lcd_set_row_without_flush(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
+                
+                if (pMessage==pSelectedMessage)
+                {
+                    gSelectedLineIndex = i;
+                    gPrevSelectedLineIndex = i;
+                }
+                
+                pMessage = pMessage->pNext;
+                
+                //since this is a cyclic list, need to rule out the case when
+                //not all message fits the screen and we don't want to print the first
+                //message again
+                if (pMessage == firstMsg)
+                {
+                    pMessage = NULL;
+                }
+                
+                smsSerialNumber++;
 
 
-		}
-
-		//print the bottom of the screen
-		lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_LISTING_SCREEN_BOTTOM,SCREEN_WIDTH);
-
-		gViewRefreshScreen = false;
-	}
-	//we only need to render specific lines
-	else
-	{
-		//find the offset of the selected message, this is also the line of the selected message
-		i = 0;
-		while(pMessage != pSelectedMessage)
-		{
-			i++;
-			pMessage = pMessage->pNext;
-		}
-
-		/* check what was the last button been pressed*/
-
-		//up button - print the message after the selected message
-		if (modelGetLastButton() == BUTTON_2)
-		{
-
-			gSelectedLineIndex--;
-			setMessageListingLineInfo(pMessage->pNext,(smsSerialNumber+i+1) % modelGetSmsDbSize(),line);
-			lcd_set_row_without_flush(i+1,false,line,SCREEN_WIDTH);
-
-		}
-		//down button - print the message before the selected message
-		else
-		{
-			gSelectedLineIndex++;
-			setMessageListingLineInfo(pMessage->pPrev,(smsSerialNumber+i-1) % modelGetSmsDbSize(),line);
-			lcd_set_row_without_flush(i-1,false,line,SCREEN_WIDTH);
-		}
-		//any other case will be considered as "refresh screen" (message deletion and message receive)
+            }
 
 
-		//print the selected message
-		setMessageListingLineInfo(pMessage,(smsSerialNumber+i) % modelGetSmsDbSize(),line);
+        }
 
-		//print the line
-		lcd_set_row_without_flush(i,true,line,SCREEN_WIDTH);
-	}
+        //print the bottom of the screen
+        lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_LISTING_SCREEN_BOTTOM,SCREEN_WIDTH);
+        
+        gViewRefreshScreen = false;
 
 	lcd_flush();
 }
