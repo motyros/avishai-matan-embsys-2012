@@ -829,7 +829,12 @@ void handleNumberScreen(button but)
         switch (but)
         {
         case BUTTON_OK: //send the edited sms
-                sendEditSms();
+            //do nothing when no number presents
+            if (gInEditRecipientIdLen == 0)
+            {
+                return;
+            }    
+            sendEditSms();
                 modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
                 viewSetRefreshScreen();
                 viewSignal();
