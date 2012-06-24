@@ -124,9 +124,6 @@ SMS_PROBE gSmsProbe;
 //the button that latest pressed
 button gPressedButton;
 
-//TODO delete this
-TX_STATUS gDbgStatus;
-
 //********** buffers to handel the network ***********//
 desc_t gTranBuf[NET_BUF_SIZE];
 desc_t gRecBuf[NET_BUF_SIZE];
@@ -372,6 +369,7 @@ TX_STATUS controllerInit()
         status = tx_mutex_create(&gProbeAckMutex,"Probe Ack Mutex",TX_INHERIT);
         if(status != TX_SUCCESS) return status;
 
+        //add the device id to the prob sms
         memcpy(gSmsProbe.device_id,DEVICE_ID,strlen(DEVICE_ID));
 
         result_t result;
@@ -380,8 +378,7 @@ TX_STATUS controllerInit()
 
         if(result != OPERATION_SUCCESS)
         {
-                //TODO need to return "TX_STATUS", not "result_t"
-                return result;
+                return TX_PTR_ERROR;
         }
 
         ip_enable();
@@ -389,7 +386,6 @@ TX_STATUS controllerInit()
         //TODO
         /* timer - for periodically send PROBE or SMS_SUBMIT
          * timer - for turning off continues button press after x ms
-         *
          */
 
 
@@ -561,9 +557,8 @@ void handleDisplayScreen(button b)
                 SmsLinkNodePtr pSelectedSms = modelGetSelectedSms();
                 SmsLinkNodePtr pFirstSms = modelGetFirstSmsOnScreen();
 
+                //delete the sms from screen and from db
                 deleteSms(pFirstSms,pSelectedSms);
-                //deleteSmsFromScreen(pFirstSms,pSelectedSms);
-                //modelRemoveSmsFromDb(pSelectedSms);
                 needToRefershGui = true;
                 break;
         }
@@ -601,9 +596,8 @@ void handleEditScreen(button but)
                 viewSignal();
                 break;
         case BUTTON_STAR: //delete the edited sms and go to Listing Screen
-                //TODO delete these lines:
-                ////reset the message
-                //inEditSms->data_length = 0;
+            /* note: the edited sms will be deleted before the next time
+             * the user in enter to the Edit Screen*/
                 modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
                 viewSetRefreshScreen();
                 viewSignal();
@@ -811,12 +805,6 @@ void deleteSmsFromScreen(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSe
         {
                 modelSetSelectedSms(pSelectedSms->pNext);
         }
-
-        //TODO
-//      else
-//      {
-//              modelSetFirstSmsOnScreen(pFirstSms->pNext);
-//      }
 }
 
 /*
@@ -835,10 +823,10 @@ void handleNumberScreen(button but)
                 return;
             }    
             sendEditSms();
-                modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
-                viewSetRefreshScreen();
-                viewSignal();
-                return;
+            modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
+            viewSetRefreshScreen();
+            viewSignal();
+            return;
         case BUTTON_STAR: //delete the edited sms and go to Listing Screen
                 /* note: the edited sms will be deleted before the next time
                  * the user in enter to the Edit Screen*/
@@ -890,11 +878,17 @@ void sendEditSms()
 {
         SMS_SUBMIT* smsToSend = modelGetInEditSms();
         unsigned dataLen;
+
+        //reset the junk
         memset(smsToSend->device_id,0,ID_MAX_LENGTH);
+
+        //add the device id to the edited sms
         memcpy(smsToSend->device_id,DEVICE_ID,strlen(DEVICE_ID));
-        //TODO make sure device_id and rec id will be zeroed before working with them
+
+        // fill the sms to send
         embsys_fill_submit(gSendBuf,smsToSend,&dataLen);
 
+        //send the packet
         network_send_packet_start((uint8_t*)gSendBuf,dataLen,dataLen);
 
         //add the sms to the linked list
@@ -951,14 +945,20 @@ void controllerButtonPressed(const button b)
         modelSetLastButton(b);
         modelSetIsContinuousButtonPress(true);
 
-        //TODO replace this global into local
-        gDbgStatus = tx_timer_deactivate(&gContinuousButtonPressTimer);
-        //TODO: do we need to check these statuses? this method is void...
-        gDbgStatus++;
-        gDbgStatus = tx_timer_change(&gContinuousButtonPressTimer,KEY_PAD_TIMER_DURATION,0);
-        gDbgStatus++;
-        gDbgStatus = tx_timer_activate(&gContinuousButtonPressTimer);
-        gDbgStatus++;
+        //stop the timer
+        TX_STATUS status = tx_timer_deactivate(&gContinuousButtonPressTimer);
+
+        //change timer expiration characteristics
+        if(status == TX_SUCCESS)
+        {
+            status = tx_timer_change(&gContinuousButtonPressTimer,KEY_PAD_TIMER_DURATION,0);
+        }
+
+        //activate the timer
+        if(status == TX_SUCCESS)
+        {
+        	status = tx_timer_activate(&gContinuousButtonPressTimer);
+        }
 
         //release the lock
         modelReleaseLock();

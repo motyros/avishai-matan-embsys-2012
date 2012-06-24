@@ -4,7 +4,11 @@
 #include "TX/tx_api.h"
 #include "common_defs.h"
 
+/*
+ * initialize the viewer
+ */
 TX_STATUS viewInit();
+
 /*
  * set the refresh flag which indicate that the view should
  * refresh the whole screen.
@@ -26,7 +30,14 @@ void viewSetGuiThreadEventsFlag(TX_EVENT_FLAGS_GROUP *pGuiThreadEventsFlag);
  */
 void viewSignal();
 
+/*
+ * is the first row is selected
+ */
 bool viewIsFirstRowSelected();
+
+/*
+ * is the last row is selected
+ */
 bool viewIsLastRowSelected();
 
 

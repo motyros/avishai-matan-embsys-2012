@@ -10,7 +10,7 @@
 #define SCREEN_WIDTH 12
 #define BOTTOM
 
-TX_EVENT_FLAGS_GROUP gGuiRefershEventFlags;
+TX_EVENT_FLAGS_GROUP gGuiRefreshEventFlags;
 TX_EVENT_FLAGS_GROUP gLcdIdleEventFlags;
 
 #define MESSAGE_LISTING_SCREEN_BOTTOM 	"New   Delete"
@@ -31,8 +31,12 @@ TX_THREAD gGuiThread;
 //we want to refresh the screen at the first time
 bool gViewRefreshScreen = true;
 
+//the selected line index
 INT gSelectedLineIndex = 0;
+
+//the precious selected line index
 INT gPrevSelectedLineIndex = 0;
+
 /*
  * FWD declaration of functions
  */
@@ -49,12 +53,11 @@ void guiThreadMainLoopFunc(ULONG v)
         viewRefresh();
 	while(true)
 	{
-
-            //wait until LCD is idle
-            tx_event_flags_get(&gLcdIdleEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
-            //wait until someone signals the GUI to refresh the screen
-		tx_event_flags_get(&gGuiRefershEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
-                viewRefresh();
+        //wait until LCD is idle
+        tx_event_flags_get(&gLcdIdleEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+        //wait until someone signals the GUI to refresh the screen
+		tx_event_flags_get(&gGuiRefreshEventFlags,1,TX_AND_CLEAR,&actualFlag,TX_WAIT_FOREVER);
+        viewRefresh();
 	}
 }
 
@@ -70,6 +73,7 @@ UINT viewInit()
 
 	do
 	{
+		//init the lcd with a call back
 		apiStatus = lcd_init(lcdDone);
 
 		if (apiStatus != OPERATION_SUCCESS)
@@ -78,13 +82,15 @@ UINT viewInit()
 			break;
 		}
 
-		status = tx_event_flags_create(&gGuiRefershEventFlags,"Gui Event Flags");
+		//create an event flags for the gui refresh
+		status = tx_event_flags_create(&gGuiRefreshEventFlags,"Gui Event Flags");
 
 		if (status != TX_SUCCESS)
 		{
 			break;
 		}
 
+		//create an event flags for the lcd idle
 		status = tx_event_flags_create(&gLcdIdleEventFlags,"Lcd Idle Event Flags");
 
 		if (status != TX_SUCCESS)
@@ -92,6 +98,7 @@ UINT viewInit()
 			break;
 		}
 
+		//create the gui thread
 		status = tx_thread_create(	&gGuiThread,
 									"Gui Thread",
 									guiThreadMainLoopFunc,
@@ -110,9 +117,10 @@ UINT viewInit()
 
 }
 
+//TODO: to delete? not in use.
 void deinit()
 {
-	tx_event_flags_delete(&gGuiRefershEventFlags);
+	tx_event_flags_delete(&gGuiRefreshEventFlags);
 	tx_event_flags_delete(&gLcdIdleEventFlags);
 	tx_thread_delete(&gGuiThread);
 
@@ -134,7 +142,6 @@ void viewSetRefreshScreen()
 
 int viewGetScreenHeight(const screen_type screen)
 {
-
 	switch(screen)
 	{
 		case MESSAGE_LISTING_SCREEN:
@@ -149,6 +156,8 @@ int viewGetScreenHeight(const screen_type screen)
 	return SCREEN_HEIGHT;
 }
 
+
+//TODO: to remove this?
 /*
 void viewSetGuiThreadEventsFlag(TX_EVENT_FLAGS_GROUP *pGuiThreadEventsFlag)
 {
@@ -160,7 +169,7 @@ void viewSetGuiThreadEventsFlag(TX_EVENT_FLAGS_GROUP *pGuiThreadEventsFlag)
 
 void viewSignal()
 {
-	tx_event_flags_set(&gGuiRefershEventFlags,1,TX_OR);
+	tx_event_flags_set(&gGuiRefreshEventFlags,1,TX_OR);
 }
 
 
@@ -215,6 +224,9 @@ void setMessageListingLineInfo(SmsLinkNodePtr pSms,int serialNumber,CHAR* pLine)
 
 }
 
+/*
+ * renders the listing screen
+ */
 void renderMessageListingScreen()
 {
 	int i,smsSerialNumber;
@@ -234,63 +246,66 @@ void renderMessageListingScreen()
 	}
 
 
-	//cehck if we need to render the whole screen
+	//TODO:check if we need to render the whole screen
 
 
-        SmsLinkNodePtr firstMsg = pMessage;
+	SmsLinkNodePtr firstMsg = pMessage;
 
-        //render every line
-        for(i = 0 ; i < SCREEN_HEIGHT-1 ; ++i)
-        {
-            //if we reached the end of the messages, just print blank lines
-            if (!pMessage)
-            {
-                lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
-            }
-            else
-            {
-                if (pMessage == modelGetFirstSms())
-                {
-                    smsSerialNumber = 0;
-                }
-                //prepare the line to print
-                setMessageListingLineInfo(pMessage,smsSerialNumber,line);
-                
-                //print the line
-                lcd_set_row_without_flush(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
-                
-                if (pMessage==pSelectedMessage)
-                {
-                    gSelectedLineIndex = i;
-                    gPrevSelectedLineIndex = i;
-                }
-                
-                pMessage = pMessage->pNext;
-                
-                //since this is a cyclic list, need to rule out the case when
-                //not all message fits the screen and we don't want to print the first
-                //message again
-                if (pMessage == firstMsg)
-                {
-                    pMessage = NULL;
-                }
-                
-                smsSerialNumber++;
+	//render every line
+	for(i = 0 ; i < SCREEN_HEIGHT-1 ; ++i)
+	{
+		//if we reached the end of the messages, just print blank lines
+		if (!pMessage)
+		{
+			lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
+		}
+		else
+		{
+			if (pMessage == modelGetFirstSms())
+			{
+				smsSerialNumber = 0;
+			}
+			//prepare the line to print
+			setMessageListingLineInfo(pMessage,smsSerialNumber,line);
 
+			//print the line
+			lcd_set_row_without_flush(i,(pMessage==pSelectedMessage),line,SCREEN_WIDTH);
 
-            }
+			if (pMessage==pSelectedMessage)
+			{
+				gSelectedLineIndex = i;
+				gPrevSelectedLineIndex = i;
+			}
+
+			pMessage = pMessage->pNext;
+
+			//since this is a cyclic list, need to rule out the case when
+			//not all message fits the screen and we don't want to print the first
+			//message again
+			if (pMessage == firstMsg)
+			{
+				pMessage = NULL;
+			}
+
+			smsSerialNumber++;
 
 
-        }
+		}
 
-        //print the bottom of the screen
-        lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_LISTING_SCREEN_BOTTOM,SCREEN_WIDTH);
-        
-        gViewRefreshScreen = false;
+
+	}
+
+	//print the bottom of the screen
+	lcd_set_row_without_flush(SCREEN_HEIGHT-1,true,MESSAGE_LISTING_SCREEN_BOTTOM,SCREEN_WIDTH);
+
+	gViewRefreshScreen = false;
 
 	lcd_flush();
 }
 
+/*
+ * renders the edit screen
+ */
 void renderMessageEditScreen()
 {
 	UINT i;
@@ -350,6 +365,9 @@ void renderMessageEditScreen()
 	lcd_flush();
 }
 
+/*
+ * renders the number screen
+ */
 void renderMessageNumberScreen()
 {
 	SMS_SUBMIT* pMessage = modelGetInEditSms();
@@ -380,6 +398,9 @@ void renderMessageNumberScreen()
 	lcd_flush();
 }
 
+/*
+ * set the time form the time stamp
+ */
 void setTimeFromTimeStamp(char* pLine,char* pTimeStamp)
 {
 	pLine[0]=pTimeStamp[7];
@@ -392,6 +413,10 @@ void setTimeFromTimeStamp(char* pLine,char* pTimeStamp)
 	pLine[7]=pTimeStamp[10];
 
 }
+
+/*
+ * renders the display screen
+ */
 void renderMessageDisplayScreen()
 {
 	//since the whole message fits the screen, the only option to render this screen
@@ -412,12 +437,13 @@ void renderMessageDisplayScreen()
 
 			SMS_DELIVER* pInMsg = (SMS_DELIVER*)pMessage->pSMS;
 
+			//set time stamp
 			setTimeFromTimeStamp(line,pInMsg->timestamp);
 
 			lcd_set_row_without_flush(1,true,line,SCREEN_WIDTH);
 
+			//reset the line
 			memset(line,' ',SCREEN_WIDTH);
-
 
 			dataLength =pInMsg->data_length;
 			pMessageBuffer =pInMsg->data;
