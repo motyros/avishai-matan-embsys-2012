@@ -1,7 +1,7 @@
 #ifndef __SMS_PROTOCOL_H__
 #define __SMS_PROTOCOL_H__
 
-#include "embsys_sms_protocol.h"
+#include "embsys_sms_protocol_mine.h"
 
 #define ID_MAX_LENGTH 8
 #define TIMESTAMP_MAX_LENGTH 14
