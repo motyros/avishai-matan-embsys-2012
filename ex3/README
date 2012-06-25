@@ -2,7 +2,7 @@ avishl02,matanp01
 Avishai Lazar 066641200 
 Matan Perel 039998570 
  
-project: Exercise 2 
+project: Exercise 3 
  
 submited files: 
  
@@ -10,6 +10,15 @@ submited files:
 	makefile     			- a make file
 	ivt.s				- interrupt vector table
         common_defs.h                   - common definitions for the library
+	main.c				- main entry of our program
+	embsys_sms_protocol_mine.c	- implementation of the sms protocol
+	embsys_sms_protocol_mine.h	- sms protocol interface
+	smsModel.c			- implementation of the model part (see our remarks)
+	smsmodel.h			- model's interface
+	smsView.c			- implementation of the view part
+	smsView.h			- view's interface
+	smsController.c			- implementation of the controller part
+	smsController.h			- controller's interfcae
 	input_panel/input_panel.c	- input panel's driver
 	input_panel/input_panel.h	- input panel's driver's interface
 	flash/flash.c			- flash memory's driver
@@ -20,10 +29,31 @@ submited files:
 	network/network.h		- network card driver's interface
 	timer/timer.c			- timer driver
 	timer/timer.h			- timer driver's interface
-
+	TX/tx_api.h			- threadX api
+	TX/tx_port.h			- porintg of TX for ARC enviroment
+	TX/tx.a				- tx compiled and linkded library
+	
 ============================remarks====================================
 
-*	we decided to "lock" the flash when operation begins until the whole operation
-  	done (even if there are some flash-idle-time during the whole operation)
+we will explain our design but first we wanna note that we implemented the bonus part.
+the 8bit string -> 7bit string and vice versa indeed was challenging :)
 
-*	It was fun to implement those drivers, especially when all works :-)
+we will discuss our design of the system. we decided to use the MVC pattern (although C isn't OOP language) since we wanted to make a total separation 
+between the logic of the system, and the way we display the data on the screen.
+
+the MVC pattern (in a nutshell) break every program with GUI into three parts
+
+1. Model	- 	representation of the current state of the program. this part holds all data structures which represents the current state of the 
+			system, such as, list of sms, what screen we are displaying right now, what was the last button been pressed etc.
+
+2. View		-	this part handle all display functionality, view talks to the model, query all neccesary data and decide how to display it
+
+3. Controller	-	this part is the "brain" of the program. the controller handle all input, updates the model and signal the view to display a screen
+
+this seperation give the flexibility of replacing parts (such as LCD with different size) without changing all parts not directly related to the display process.
+
+in our program, the controller has the input panel thread and network send and recv threads inside it, once something interesting happens (such as, packet arrives, key pressed) the
+controller acts, according the screen the user entered and change the relevant data structures via the model interface. if there is a need to refresh the screen, the controller signals the GUI thread via
+the model interface, and when the GUI thread wakes up, it query the model, "understands" what is the screen need to be display and then query the relevant data and display it on the LCD
+
+

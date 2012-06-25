@@ -37,7 +37,7 @@ a.out: main.o input_panel.o LCD.o network.o timer.o smsModel.o smsView.o smsCont
 	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
 
 tar:
-	tar --exclude=".*" -cvjf avishl02_matanp01 flash input_panel LCD network timer ivt.s common_defs.h README makefile
+	tar --exclude=".*" -cvjf avishl02_matanp01 input_panel LCD network timer TX common_defs.h devices.svr3 embsys_sms_protocol_mine.c embsys_sms_protocol_mine.h ex3.args ivt.s  main.c makefile README 
 
 clean: 
 	rm -f avishl02_matanp01 a.out *.o
