@@ -8,6 +8,7 @@ submited files:
  
 	README				- this file 
 	makefile     			- a make file
+	device.svr3			- mapping of the segments to memory
 	ivt.s				- interrupt vector table
         common_defs.h                   - common definitions for the library
 	main.c				- main entry of our program
