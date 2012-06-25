@@ -17,12 +17,11 @@
 // Return values of external functions.
 typedef enum
 {
-    OPERATION_SUCCESS				= 0,
+    OPERATION_SUCCESS			= 0,
     NOT_READY					= 1,
     NULL_POINTER				= 2,
-    INVALID_ARGUMENTS	        	        = 3,
-
-    NETWORK_TRANSMIT_BUFFER_FULL	        = 4
+    INVALID_ARGUMENTS	        = 3,
+    NETWORK_TRANSMIT_BUFFER_FULL= 4
 
 } result_t;
 

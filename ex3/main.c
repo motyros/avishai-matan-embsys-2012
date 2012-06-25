@@ -3,34 +3,15 @@
 #include "smsController.h"
 #include "smsModel.h"
 #include "smsView.h"
-#include "smsController.h"
 #include "timer/timer.h"
-#include <string.h>
-SMS_SUBMIT gOutgoingSms;
-SMS_DELIVER gIncommingSms;
-
-void addMessagesToDB()
-{
-
-	memcpy(gOutgoingSms.data,"Hi How Are You",14);
-	memcpy(gOutgoingSms.device_id,"00000000",8);
-	memcpy(gOutgoingSms.recipient_id,"11111111",8);
-	gOutgoingSms.data_length = 14;
-
-	modelAddSmsToDb(&gOutgoingSms,OUTGOING_MESSAGE);
 
 
-	memcpy(gIncommingSms.data,"Fine, thanks :)",15);
-	memcpy(gIncommingSms.sender_id,"11111111",8);
-	gIncommingSms.data_length = 15;
-
-	modelAddSmsToDb(&gIncommingSms,INCOMMING_MESSAGE);
-}
 //TX will call this function after system init
 void tx_application_define(void *first) 
 {
 	TX_STATUS status;
 
+	//init the MVC components. each component creates its own threads
 	status = modelInit();
 	DBG_ASSERT(status == TX_SUCCESS);
 
@@ -40,11 +21,10 @@ void tx_application_define(void *first)
 	status = controllerInit();
 	DBG_ASSERT(status == TX_SUCCESS);
 
-	arm_tx_timer(TX_TICK_MS);
+	//set initial values to the timer tx using
+	timer_arm_tx_timer(TX_TICK_MS);
 
-	//addMessagesToDB();
-
-	//create some threads in running mode - after this function ends, TX will scedule them to run
+	//enable interrupts
 	_enable();
 }
 

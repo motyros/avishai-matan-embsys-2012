@@ -1,0 +1,29 @@
+avishl02,matanp01 
+Avishai Lazar 066641200 
+Matan Perel 039998570 
+ 
+project: Exercise 2 
+ 
+submited files: 
+ 
+	README				- this file 
+	makefile     			- a make file
+	ivt.s				- interrupt vector table
+        common_defs.h                   - common definitions for the library
+	input_panel/input_panel.c	- input panel's driver
+	input_panel/input_panel.h	- input panel's driver's interface
+	flash/flash.c			- flash memory's driver
+	flash/flash.h			- flash memory's driver's interface
+	LCD/LCD.c			- LCD's driver
+	LCD/LCD.h			- LCD's driver's interface
+	network/network.c		- network card driver
+	network/network.h		- network card driver's interface
+	timer/timer.c			- timer driver
+	timer/timer.h			- timer driver's interface
+
+============================remarks====================================
+
+*	we decided to "lock" the flash when operation begins until the whole operation
+  	done (even if there are some flash-idle-time during the whole operation)
+
+*	It was fun to implement those drivers, especially when all works :-)

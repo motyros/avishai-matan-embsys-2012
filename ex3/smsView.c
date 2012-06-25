@@ -117,14 +117,6 @@ UINT viewInit()
 
 }
 
-//TODO: to delete? not in use.
-void deinit()
-{
-	tx_event_flags_delete(&gGuiRefreshEventFlags);
-	tx_event_flags_delete(&gLcdIdleEventFlags);
-	tx_thread_delete(&gGuiThread);
-
-}
 
 /*
  * callback when LCD operation done
@@ -155,16 +147,6 @@ int viewGetScreenHeight(const screen_type screen)
 	DBG_ASSERT(false);
 	return SCREEN_HEIGHT;
 }
-
-
-//TODO: to remove this?
-/*
-void viewSetGuiThreadEventsFlag(TX_EVENT_FLAGS_GROUP *pGuiThreadEventsFlag)
-{
-	DBG_ASSERT(pGuiThreadEventsFlag!=NULL);
-	gViewGuiThreadEventsFlag = pGuiThreadEventsFlag;
-}
-*/
 
 
 void viewSignal()
@@ -244,9 +226,6 @@ void renderMessageListingScreen()
 		//get the serial number of the first message
 		smsSerialNumber = modelGetSmsSerialNumber(pMessage);
 	}
-
-
-	//TODO:check if we need to render the whole screen
 
 
 	SmsLinkNodePtr firstMsg = pMessage;

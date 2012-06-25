@@ -4,6 +4,7 @@
 
 #define SWAP_BYTE_NIBBLE(b) (((b)&0xf)*0x10 + ((b)>>4))
 
+//calculate the length of the device id string
 unsigned deviceIdSize(char *pBuff)
 {
    unsigned size = 0;
@@ -15,6 +16,8 @@ unsigned deviceIdSize(char *pBuff)
    return size;
 }
 
+//converts string number to nibble swapped bytes representation  with trailing F's if needed
+//return the number of bytes we used to represent this string
 unsigned convStrToNibbleSwaped(char* str,char *swappedNibble,unsigned strSize)
 {
    unsigned i;
@@ -22,15 +25,17 @@ unsigned convStrToNibbleSwaped(char* str,char *swappedNibble,unsigned strSize)
    char n1,n2;
    for(i = 0 ; i < strSize ; i+=2)
    {
+	  //if we have odd digits, add 'F' to the last number
       if (i+1 == strSize)
       {
          *swappedNibble++ = (*str++ - '0') | 0xF0;
       }
       else
       {
+    	 //get the value of the next two digits
          n1 =  (*str++ - '0');
          n2 = (*str++ - '0');
-         
+         //place the values such that the second number will be placed at the 4 MSB
          *swappedNibble++ = (n2<<4) | n1;
       }
    }
@@ -38,6 +43,7 @@ unsigned convStrToNibbleSwaped(char* str,char *swappedNibble,unsigned strSize)
    return (unsigned)(swappedNibble-origSwappedNibble);
 }
 
+//convert nibble swapped bytes representation to string with the number
 unsigned convNibbleSwapedToString(char* nibble,char* str,unsigned strSize)
 {
    unsigned i;
@@ -45,6 +51,7 @@ unsigned convNibbleSwapedToString(char* nibble,char* str,unsigned strSize)
 
    for(i = 0 ; i < strSize ; i+=2)
    {
+	   //parse every byte into two digits (unless the last byte has F at the 4 MSB)
       *str++ = (*nibble & 0xf) + '0';
       if (i+1 < strSize)
       {
@@ -56,6 +63,7 @@ unsigned convNibbleSwapedToString(char* nibble,char* str,unsigned strSize)
    return (unsigned)(nibble - origNibble);
 }
 
+//this function return the number represents the n bits from the byte byte
 char bottomNBits(char byte,unsigned n)
 {
    return ((1<<n)-1) & byte;
@@ -68,6 +76,7 @@ char bottomNBits(char byte,unsigned n)
  */
 unsigned encodeAs7bitStr(char* str,char* encodedStr,unsigned size)
 {
+   //borrow will indicate how many bits from the current byte we "save" for the next char to encide
    unsigned borrow = 1,i;
    
    char* pOrigText = encodedStr;
@@ -93,38 +102,7 @@ unsigned encodeAs7bitStr(char* str,char* encodedStr,unsigned size)
 
 }
 
-/*
- * decode 7 bits string to 8 bits string
- * size - number of encoded chars
- * return value - the size of the encoded str in bytes
- *
- */
-/*unsigned decodeTo8bitStr(char* encodedStr,char* str,unsigned size)
-{
-   
-
-   unsigned borrow = 0,lastBorrow = 0,i=0,chars;
-
-   chars = 0;
-
-   for(i = 0,chars = 0 ; chars < size ; ++i,++chars)
-   {
-      
-      *str++ = (bottomNBits(encodedStr[i],7-borrow)<<borrow) | ((i==0)?0:bottomNBits((str[i-1]>>(8-borrow)),borrow));
-
-      borrow++;
-      
-      if (borrow == 8)
-      {
-         borrow = 0;
-         --i;
-      }
-   }
-
-   return i;
-}
-*/
-
+//decode 7 bits string stream into regular 8 bits string stream
 unsigned decodeTo8bitStr(char* decodedStr,char* str,unsigned size)
 {
    unsigned borrow = 0,i=0,chars=0;
@@ -166,7 +144,6 @@ unsigned decodeTo8bitStr(char* decodedStr,char* str,unsigned size)
 EMBSYS_STATUS embsys_fill_probe(char *buf, SMS_PROBE *msg_fields, char is_ack, unsigned *len)
 {
    unsigned size;
-   char *origBuf = buf;
 
    if (is_ack == (char)NULL)
    {
@@ -275,11 +252,13 @@ EMBSYS_STATUS embsys_parse_submit_ack(char *buf, SMS_SUBMIT_ACK *msg_fields)
    memset(msg_fields,0,sizeof(SMS_SUBMIT_ACK));
    do
    {
+	  //message identifier
       if ((unsigned char)*buf++ != 0x07)
       {
          break;
       }
 
+      //message reference number
       msg_fields->msg_reference = *buf++;
       numberLength = *buf++;
 
@@ -316,6 +295,7 @@ EMBSYS_STATUS embsys_parse_deliver(char *buf, SMS_DELIVER *msg_fields)
    memset(msg_fields,0,sizeof(SMS_DELIVER));
    do
    {
+	  //message identifier
       if ((unsigned char)*buf++ != 0x04)
       {
          break;
@@ -347,133 +327,9 @@ EMBSYS_STATUS embsys_parse_deliver(char *buf, SMS_DELIVER *msg_fields)
       decodeTo8bitStr(buf,msg_fields->data,msg_fields->data_length);
 
       return SUCCESS;
-   }while(0);
+   }while(false);
 
    return FAIL;
    
-}
-/*
-void testSmsProbe()
-{
-   //make sure #define ID_MAX_LENGTH  = 9!!!
-   char res[] = {0x02,0x09,0xc9,0x21,0x43,0x65,0x87,0xf9};
-
-   char buf[100];
-   unsigned size;
-   SMS_PROBE m;
-
-   memcpy(m.device_id,"123456789",9);
-
-   embsys_fill_probe((char*)buf,&m,(char)NULL,&size);
-
-   if (size == 8 && memcmp(res,buf,8) == 0)
-   {
-      printf("%s\n","testSmsProbe - passed");
-   }
-   else
-   {
-        printf("%s\n","testSmsProbe - failed");
-   }
-   //buff = 02 09 c9 21 43 65 87 f9
-   //size = 8
-
-   return;
-
-}
-
-void testSmsProbeAck()
-{
-   //make sure #define ID_MAX_LENGTH  = 9!!!
-   char res[] = {0x12,0x09,0xc9,0x21,0x43,0x65,0x87,0xf9,0x99,0x30,0x92,0x51,0x61,0x95,0x80,0x09,0xc9,0x21,0x43,0x65,0x87,0xf9};
-
-   char buf[100];
-   unsigned size;
-   SMS_PROBE m;
-
-   memcpy(m.device_id,"123456789",9);
-   memcpy(m.sender_id,"123456789",9);
-   memcpy(m.timestamp,"99032915165908",14);
-
-   embsys_fill_probe((char*)buf,&m,1,&size);
-
-   if (size == 22 && memcmp(res,buf,22) == 0)
-   {
-      printf("%s\n","testSmsProbe - passed");
-   }
-   else
-   {
-        printf("%s\n","testSmsProbe - failed");
-   }
-}
-
-void testSmsDeliver()
-{
-   char blob[] = {0x04,0x09,0xc9,0x21,0x43,0x65,0x87,0xf9,0x00,0x00,0x99,0x30,0x92,0x51,0x61,0x95,0x80,0x0a,0xe8,0x32,0x9b,0xfd,0x46,0x97,0xd9,0xec,0x37};
-   SMS_DELIVER m;
-   EMBSYS_STATUS s = embsys_parse_deliver(blob,&m);
-
-   //verify fields
-   return;
-}
-
-void testSmsSumbit()
-{
-   char blob1[] = {0x11,0x09,0xc9,0x21,0x43,0x65,0x87,0xf9,0x00,0x09,0xc9,0x21,0x43,0x65,0x87,0xf9,0x00,0x00,0x3b,0x0a,0xe8,0x32,0x9b,0xfd,0x46,0x97,0xd9,0xec,0x37};
-   char blob2[29];
-   SMS_SUBMIT m;
-   unsigned len;
-   EMBSYS_STATUS s;
-
-   memcpy(m.data,"hellohello",10);
-   m.data_length = 10;
-   m.msg_reference = 0;
-   memcpy(m.device_id,"123456789",9);
-   memcpy(m.recipient_id,"123456789",9);
-   
-   
-   s = embsys_fill_submit(blob2,&m,&len);
-
-   //verify fields
-
-   return;
-}
-
-void testSmsSubmitAck()
-{
-   char blob[] = {0x07,0x00,0x09,0xc9,0x21,0x43,0x65,0x87,0xf9};
-   SMS_SUBMIT_ACK m;
-
-   embsys_parse_submit_ack(blob,&m);
-
-   return;
-}
-*/
-int main1()
-{
-   /*char msg[100];
-   char enc[100];
-   char msg1[100];
-
-   unsigned size;
-
-   memcpy(msg,"hellohello",10);
-   size = encodeAs7bitStr(msg,enc,10);
-   size = decodeTo8bitStr(enc,msg1,10);
-   */
-
-    //  testSmsSubmitAck();
-   /*
-   char stream[] = {'a','b'};
-   char num[9],num2[9];
-   char buf[100];
-   unsigned size;
-   memcpy(num,"123456789",9);
-   size = convStrToNibbleSwaped(num,buf,9);
-   size = convNibbleSwapedToString(buf,num2,9);
-   */
-
-
-
-   return 0;
 }
 

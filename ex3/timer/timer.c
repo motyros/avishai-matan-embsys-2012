@@ -114,7 +114,7 @@ result_t timer1_register(uint32_t interval, bool one_shot, void(*timer_cb)(void)
 	return registerTimer(1,interval,one_shot,timer_cb);
 }
 
-void arm_tx_timer(uint32_t interval)
+void timer_arm_tx_timer(uint32_t interval)
 {
 	Timer t;
 

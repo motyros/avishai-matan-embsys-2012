@@ -39,12 +39,13 @@
 //*********** Mocro Functions **********//
 #define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
 
-
+//network send event flag values
 typedef enum
 {
         SEND_PROBE = 1,
         SEND_PROBE_ACK = 2,
 } NetworkSendFlags;
+
 
 //********** FWD Declaration ***********//
 //** the documentation is in the code **//
@@ -105,9 +106,6 @@ int gInEditContinuosNum;
 
 //the length of the recipient_id in the edited sms
 int gInEditRecipientIdLen;
-
-//TODO: to remove?
-bool gNeedToAckDeliverCounter = false;
 
 //the timer of the ContinuousButtonPress
 TX_TIMER gContinuousButtonPressTimer;
@@ -176,6 +174,8 @@ void networkReceiveCB(uint8_t buffer[], uint32_t size, uint32_t length)
         DBG_ASSERT(size>=length);
         DBG_ASSERT(length<=NETWORK_MAXIMUM_TRANSMISSION_UNIT);
 
+        //stop the periodic timer to avoid recv of multiple copies of the
+        //same SMS if we send another probe message and not probe ack
         tx_timer_deactivate(&gPeriodicSendTimer);
 
         //copy the packet to the global
@@ -373,6 +373,7 @@ TX_STATUS controllerInit()
         memcpy(gSmsProbe.device_id,DEVICE_ID,strlen(DEVICE_ID));
 
         result_t result;
+
         //init the key pad
         result = ip_init(buttonPressedCB);
 
@@ -382,12 +383,6 @@ TX_STATUS controllerInit()
         }
 
         ip_enable();
-
-        //TODO
-        /* timer - for periodically send PROBE or SMS_SUBMIT
-         * timer - for turning off continues button press after x ms
-         */
-
 
         //note: no need to take any lock since all init are single threaded
         modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
@@ -400,8 +395,7 @@ TX_STATUS controllerInit()
         result = networkInit();
         if(result != OPERATION_SUCCESS)
         {
-                //TODO need to return "TX_STATUS", not "result_t"
-                return result;
+                return TX_START_ERROR;
         }
 
         return TX_SUCCESS;
@@ -467,8 +461,6 @@ void controllerPacketArrived()
                 //copy the sender id, for the probe ack
                 memcpy(gSmsProbe.sender_id,deliverSms.sender_id,ID_MAX_LENGTH);
                 memcpy(gSmsProbe.timestamp,deliverSms.timestamp,TIMESTAMP_MAX_LENGTH);
-
-                //gNeedToAckDeliverCounter = true;
 
                 //signal the send thread to send probe akc
                 tx_event_flags_set(&gNetworkSendEventFlags,SEND_PROBE_ACK,TX_OR);
@@ -963,38 +955,5 @@ void controllerButtonPressed(const button b)
         //release the lock
         modelReleaseLock();
 }
-
-
-////////////////////////////////////////////////////////////////////
-/////////////// TODO: to delete these methods? /////////////////////
-////////////////////////////////////////////////////////////////////
-
-/*
- *
- */
-void twoDigitIntToStr(UINT n,char* str)
-{
-        *str++ = (n/10) + '0';
-        *str = (n % 10) + '0';
-}
-
-/*
- *
- */
-void fillTimeStampBuffer(CHAR* buf)
-{
-        time_t t = time(NULL);
-        struct tm tm = *localtime(&t);
-
-        twoDigitIntToStr((tm.tm_year + 1900) % 100,buf++);
-        twoDigitIntToStr(tm.tm_mon + 1,buf++);
-        twoDigitIntToStr(tm.tm_mday,buf++);
-        twoDigitIntToStr(tm.tm_hour,buf++);
-        twoDigitIntToStr(tm.tm_min,buf++);
-        twoDigitIntToStr(tm.tm_sec,buf++);
-        //since we are GMT+2, and the units are 15 minutes, we need 4*2 units
-        twoDigitIntToStr(4*2,buf);
-}
-
 
 
