@@ -1,5 +1,5 @@
 #include "smsModel.h"
-#include "embsys_sms_protocol.h"
+#include "embsys_sms_protocol_mine.h"
 
 
 #define SMS_BLOCK_SIZE (sizeof(SMS_DELIVER))

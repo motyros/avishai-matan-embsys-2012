@@ -57,4 +57,14 @@ in our program, the controller has the input panel thread and network send and r
 controller acts, according the screen the user entered and change the relevant data structures via the model interface. if there is a need to refresh the screen, the controller signals the GUI thread via
 the model interface, and when the GUI thread wakes up, it query the model, "understands" what is the screen need to be display and then query the relevant data and display it on the LCD
 
+in addition we used 4 threads
 
+GUI thread          - render screens
+KeyPad thread       - listen to the key pad and process pressed keys
+Send network thread - sends the periodic SEND_PROBE or SEND_PROBE_ACK messages every 100 ms.
+Recv network thread - process incomming packets.
+
+every thread waits on event flags. when interrupt occurres, in the callback we signal the relevant event flags which wakes up the relevant thread to do his job.
+
+thanks,
+Avishai & Matan

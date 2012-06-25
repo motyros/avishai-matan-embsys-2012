@@ -327,7 +327,7 @@ EMBSYS_STATUS embsys_parse_deliver(char *buf, SMS_DELIVER *msg_fields)
       decodeTo8bitStr(buf,msg_fields->data,msg_fields->data_length);
 
       return SUCCESS;
-   }while(false);
+   }while(0);
 
    return FAIL;
    

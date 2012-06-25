@@ -1,7 +1,7 @@
 #include "smsView.h"
 #include "smsModel.h"
 #include "TX/tx_api.h"
-#include "embsys_sms_protocol.h"
+#include "embsys_sms_protocol_mine.h"
 #include <string.h>
 #include "LCD/LCD.h"
 #include "common_defs.h"
