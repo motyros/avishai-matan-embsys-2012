@@ -18,7 +18,7 @@ timer.o: timer/timer.c timer/timer.h common_defs.h
 smsController.o: smsController.c smsController.h TX/tx_api.h common_defs.h input_panel/input_panel.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-smsModel.o: smsModel.c smsModel.h common_defs.h TX/tx_api.h embsys_sms_protocol.h
+smsModel.o: smsModel.c smsModel.h common_defs.h TX/tx_api.h embsys_sms_protocol_mine.h
 	mcc -c -a6 -g -w3 $< -o $@
 
 smsView.o: smsView.c smsView.h TX/tx_api.h common_defs.h
