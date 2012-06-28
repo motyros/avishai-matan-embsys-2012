@@ -15,8 +15,7 @@
 
 //**************** Times ***************//
 #define KEY_PAD_TIMER_DURATION (150/TX_TICK_MS)
-#define NETWORK_SLEEP_PERIOD (100/TX_TICK_MS)
-#define NETWORK_PERIODIC_SEND_DURATION (100/TX_TICK_MS)
+#define NETWORK_PERIODIC_SEND_DURATION (1000/TX_TICK_MS)
 
 //******** Threads Stack Sizes *********//
 #define KEY_PAD_THREAD_STACK_SIZE (1024)
@@ -269,7 +268,7 @@ TX_STATUS createTimers()
                                                                 "Periodic send timer",
                                                                 periodicSendTimerCB,
                                                                 0,
-                                                                NETWORK_PERIODIC_SEND_DURATION*5,
+                                                                NETWORK_PERIODIC_SEND_DURATION,
                                                                 NETWORK_PERIODIC_SEND_DURATION,
                                                                 TX_AUTO_ACTIVATE);
         return status;
