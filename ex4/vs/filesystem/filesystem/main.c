@@ -1,6 +1,9 @@
 #include "flash.h"
 
+void intstallFileSystem();
+
 int main()
 {
-   return 0;
+	intstallFileSystem();
+	return 0;
 }

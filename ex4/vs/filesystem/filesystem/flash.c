@@ -3,8 +3,6 @@
 
 
 
-#define FLASH_SIZE 1024*64
-#define BLOCK_SIZE 1024*4
 
 char flash[FLASH_SIZE];
 bool flashInUse = false;

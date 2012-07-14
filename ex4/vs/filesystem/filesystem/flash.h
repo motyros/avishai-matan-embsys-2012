@@ -12,7 +12,9 @@
 #include "common_defs.h"
 
 // Maximum size of data buffer that can be used.
-#define MAX_REQUEST_BUFFER_SIZE 512
+#define MAX_REQUEST_BUFFER_SIZE (512)
+#define FLASH_SIZE (1024*64)
+#define BLOCK_SIZE (1024*4)
 
 
 /**********************************************************************
