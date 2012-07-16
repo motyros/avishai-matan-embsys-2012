@@ -1,15 +1,37 @@
 #include "flash.h"
 #include <string.h>
-
+#include <stdio.h>
 
 
 
 char flash[FLASH_SIZE];
 bool flashInUse = false;
 
+void ensureFlashExist()
+{
+   FILE* f = fopen("d:\\development\\embsys\\ex4\\flash.img","r");
+   char a = '\0';
+   if (f == NULL)
+   {
+      f = fopen("d:\\development\\embsys\\ex4\\flash.img","w+");
+      fseek(f,64*1024-1,SEEK_SET);
+      fwrite(&a,1,1,f);
+      fclose(f);
+   }
+   else
+   {
+      fclose(f);
+   }
+}
 result_t flash_init( void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32_t size),
 		     void (*flash_request_done_cb)(void))
 {
+   FILE* f;
+   ensureFlashExist();
+   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r");
+   fread(flash,64*1024,1,f);
+   fclose(f);
+
    return OPERATION_SUCCESS;
 }
 
@@ -149,6 +171,7 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
 result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer[])
 {
    uint16_t i;
+   FILE* f;
 
    if (flashInUse)
    {
@@ -160,6 +183,10 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
    {
       flash[start_address + i ] &= buffer[i]; //nor flash can turn off bits only
    }
+   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r+");
+   fseek(f,start_address,SEEK_SET);
+   fwrite(buffer,1,size,f);
+   fclose(f);
    flashInUse = false;
 
    return OPERATION_SUCCESS;
@@ -181,6 +208,8 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
  ***********************************************************************/
 result_t flash_bulk_erase_start(void)
 {
+   FILE* f;
+
    if (flashInUse)
    {
       return NOT_READY;
@@ -188,6 +217,9 @@ result_t flash_bulk_erase_start(void)
 
    flashInUse = true;
    memset(flash,0xFF,FLASH_SIZE);
+   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r+");
+   fwrite(flash,1,sizeof(flash),f);
+   fclose(f);
    flashInUse = false;
 
    return OPERATION_SUCCESS;
@@ -210,6 +242,8 @@ result_t flash_bulk_erase_start(void)
  ***********************************************************************/
 result_t flash_block_erase_start(uint16_t start_address)
 {
+   FILE* f;
+
    if (flashInUse)
    {
       return NOT_READY;
@@ -218,6 +252,10 @@ result_t flash_block_erase_start(uint16_t start_address)
    flashInUse = true;
    start_address = (start_address/BLOCK_SIZE)*BLOCK_SIZE;
    memset(&flash[start_address],0xFF,BLOCK_SIZE);
+   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r+");
+   fseek(f,start_address,SEEK_SET);
+   fwrite(&flash[start_address],1,BLOCK_SIZE,f);
+   fclose(f);
    flashInUse = false;
 
    return OPERATION_SUCCESS;

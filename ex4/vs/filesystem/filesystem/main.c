@@ -1,9 +1,10 @@
 #include "flash.h"
 
 void intstallFileSystem();
+void test();
 
 int main()
 {
-	intstallFileSystem();
+   test();
 	return 0;
 }
