@@ -211,7 +211,7 @@ FS_STATUS intstallFileSystem()
 
 	header.canary = CANARY_VALUE;
 	header.eraseNumber = 0;
-	header.metadata.bits.type = LOG;
+	
 
 	header.metadata.bits.emptyEU = 1;
 
@@ -227,16 +227,24 @@ FS_STATUS intstallFileSystem()
 		if (i > 0)
 		{
 			header.metadata.bits.type = DATA;
+            gEUList[i].nextFreeOffset = BLOCK_SIZE;
+            gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader);
 		}
+        else
+        {
+            header.metadata.bits.type = LOG;
+            gEUList[i].nextFreeOffset = BLOCK_SIZE - sizeof(LogEntry); //make room for one log entry at the end of the block
+            gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader) - sizeof(LogEntry);
+        }
         
 		flash_write(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
 		
 		header.metadata.bits.valid = 0;
 		flash_write(euAddress + MY_OFFSET(EraseUnitHeader,metadata.data),1,(uint8_t*)&header.metadata.data);
 
-		gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader);
+		
 		gEUList[i].eraseNumber = 0;
-		gEUList[i].nextFreeOffset = BLOCK_SIZE;
+		
 		gEUList[i].validDescriptors = 0;
 		gEUList[i].totalDescriptors = 0;
 		gEUList[i].deleteFilesTotalSize = 0;
@@ -251,40 +259,39 @@ FS_STATUS intstallFileSystem()
 
 void ParseEraseUnitContent(uint16_t i)
 {
-   uint16_t baseAddress = i*BLOCK_SIZE;
-   EraseUnitHeader header;
+   uint16_t baseAddress = i*BLOCK_SIZE,secDescOffset = sizeof(EraseUnitHeader);
+
    SectorDescriptor sd;
 
-   gEUList[i].bytesFree = BLOCK_SIZE - sizeof(EraseUnitHeader);
-
-
-
-   flash_read(baseAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
-
-   if (header.metadata.bits.emptyEU == 0) //there are some Sector Desciptors
+   do
    {
-      baseAddress += sizeof(EraseUnitHeader);
+        flash_read(baseAddress+secDescOffset,sizeof(SectorDescriptor),(uint8_t*)&sd);
+        
+        //check if we wrote the size and offset succesfully
+        if (sd.metadata.bits.validOffset == 0)
+        {
+            gEUList[i].bytesFree-=sd.size;
+            gEUList[i].nextFreeOffset-=sd.size;
+
+            //if this file isn't valid anymore (deleted or just not valid) add it's size
+            if (sd.metadata.bits.validDesc == 1 || sd.metadata.bits.obsoleteDes == 0)
+            {
+                gEUList[i].deleteFilesTotalSize+=(sd.size+sizeof(SectorDescriptor));
+            }
+        }
+
+        if (sd.metadata.bits.validDesc == 0 && sd.metadata.bits.obsoleteDes == 1)
+        {
+            ++gEUList[i].validDescriptors;
+        }
+        
+        ++gEUList[i].totalDescriptors;
+        secDescOffset += sizeof(SectorDescriptor);
 
 
+    }while(!sd.metadata.bits.lastDesc && secDescOffset+sizeof(SectorDescriptor) <= BLOCK_SIZE);
 
-      do
-      {
-         flash_read(baseAddress,sizeof(SectorDescriptor),(uint8_t*)&sd);
-         
-         if (sd.metadata.bits.validOffset == 0) //metadata been verified
-         {
-            *dataBytesInUse+=sd.size;
-         }
-
-         if (sd.metadata.bits.validDesc == 0 && sd.metadata.bits.obsoleteDes == 1)
-         {
-            ++*validDescriptors;
-         }
-         ++*totalDescriptors;
-         baseAddress += sizeof(SectorDescriptor);
-
-      }while(!sd.metadata.bits.lastDesc);
-   }
+    gEUList[i].bytesFree -= sizeof(SectorDescriptor)*gEUList[i].totalDescriptors;
 }
 
 /*void handleLogSelfMigration(uint8_t headerHostIndex,HeaderTemp h)
@@ -397,7 +404,9 @@ void loadFilesystem()
       
 		gEUList[i].eraseNumber = header.eraseNumber;
 		gEUList[i].metadata.data = header.metadata.data;
-		
+		gEUList[i].bytesFree = BLOCK_SIZE - sizeof(EraseUnitHeader);
+        gEUList[i].nextFreeOffset = BLOCK_SIZE;
+
 		//if we found valid log
 		if (header.metadata.bits.type == LOG)
 		{
@@ -416,47 +425,41 @@ void loadFilesystem()
 			{
 				firstLogIndex = i;
 			}
+
+            gEUList[i].bytesFree -= sizeof(LogEntry);
+            gEUList[i].nextFreeOffset -= sizeof(LogEntry);
 		}
 		//regular sector
-		else
+        else if (gEUList[i].metadata.bits.emptyEU == 0)
 		{
+
 			ParseEraseUnitContent(i);
+
+            gFilesCount+=gEUList[i].validDescriptors;
+
 		}
 
-		if (header.metadata.bits.valid == 0 && header.metadata.bits.obsolete == 1)
-		{
-			ParseEraseUnitContent(i,&gEUList[i].validDescriptors,&gEUList[i].validDescriptors,&dataBytesInUse);
-			gEUList[i].nextFreeOffset = BLOCK_SIZE - dataBytesInUse;
-			gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader) - sizeof(SectorDescriptor)*gEUList[i].validDescriptors - dataBytesInUse;
-		}
-
-      gFilesCount+=gEUList[i].validDescriptors;
+        
       
-
 		euAddress+=BLOCK_SIZE;
 	}
 
-   //if no log found, fs not exist, create one
-   if (logCount == 0 || logCount > 2)
+   //if no log found, or corrupted fs, create one
+   if (logCount == 0 || logCount > 2 || corruptedCanariesCount > 1)
    {
       intstallFileSystem();
    }
 
-   
-   if (headerTempFound)
+   if (logCount == 1)
    {
-      handleLogSelfMigration(tempHostIndex,headerTemp);
+       gLogIndex = firstLogIndex;
    }
-   else if (logExists)
+   else
    {
-	  gLog.logEUListIndex = firstLogIndex;
-      parseLog();
+       //resolve duplicity
    }
-   
-   //check if valid temp exist, error while reasing block and attempting to create new log on the same EU
 
-   //check last entry at the Log and complete it
-
+   //cehck if the "true" log has an entry and complete it if needed
 }
 
 
@@ -466,41 +469,31 @@ FS_STATUS fs_init(const FS_SETTINGS settings)
 }
 
 
-
-void AddLogEntry(LogEntry* pEntry,uint16_t size)
+void createLogEntry(uint8_t euIndexToDelete,uint32_t newEraseNumber)
 {
-   uint16_t entryAbsAddr;
+    LogEntry entry;
+    uint16_t entryAbsAddr = (gLogIndex+1)*(BLOCK_SIZE) - sizeof(LogEntry);
 
-   if (gLog.logEntryOffset + sizeof(MoveBlockEntry) >= (FLASH_SIZE-sizeof(MoveBlockEntry)))
-   {
-      //TODO create new log, (add log entry if needed)
-   }
+    memset(&entry,0xFF,sizeof(LogEntry));
 
-   //calc log entry address
-   entryAbsAddr = BLOCK_SIZE*gLog.logEUListIndex + gLog.logEntryOffset;
+    entry.bits.euIndex = euIndexToDelete;
+    entry.bits.eraseNumber = newEraseNumber;
 
-   //write entry
-   flash_write(entryAbsAddr,size,(uint8_t*)pEntry);
+    flash_write(entryAbsAddr,sizeof(LogEntry),(uint8_t*)&entry);
 
-   //write valid bit
-   pEntry->addFile.valid = 0;
+    entry.bits.valid = 0;
 
-   //TODO check if we can write the specific byte only
-   flash_write(entryAbsAddr,size,(uint8_t*)pEntry);
-
-   gLog.logEntryOffset+=size;
+    flash_write(entryAbsAddr,sizeof(LogEntry),(uint8_t*)&entry);
 }
 
-void ObsoleteLogEntry(LogEntry* pEntry,uint16_t size)
+/*void ObsoleteLogEntry(LogEntry* pEntry,uint16_t size)
 {
    pEntry->addFile.obsolete = 0;
    flash_write(BLOCK_SIZE*gLog.logEUListIndex + gLog.logEntryOffset - size,size,(uint8_t*)pEntry);
-}
+}*/
 
 FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint8_t euIndex)
 {
-   LogEntry entry;
-
    uint16_t sectorDescAddr = BLOCK_SIZE*euIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*gEUList[euIndex].totalDescriptors;
 
    uint16_t dataAddr = BLOCK_SIZE*euIndex + gEUList[euIndex].nextFreeOffset - length;
@@ -509,27 +502,7 @@ FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint
 
    EraseUnitHeader header;
 
-   memset(&entry,0xFF,sizeof(LogEntry));
    memset(&desc,0xFF,sizeof(SectorDescriptor));
-
-   entry.addFile.euIndex = euIndex;
-   entry.addFile.sectorIndex = gEUList[euIndex].totalDescriptors;
-   entry.addFile.type = ADD_FILE;
-
-   AddLogEntry(&entry,sizeof(AddFileEntry));
-
-   strncpy(desc.fileName,filename,FILE_NAME_MAX_LEN);
-   desc.offset = gEUList[euIndex].nextFreeOffset - length;
-   desc.size = length;
-
-   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
-   desc.metadata.bits.validDesc = 0;
-   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
-
-   flash_write(dataAddr,length,(uint8_t*)data);
-   desc.metadata.bits.validDesc = 0;
-   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
-      
 
    //mark prev sector as non last
    if (gEUList[euIndex].totalDescriptors != 0)
@@ -538,6 +511,7 @@ FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint
 	   memset(&desc,0xFF,sizeof(SectorDescriptor));
 	   desc.metadata.bits.lastDesc = 0;
 	   flash_write(sectorDescAddr - sizeof(SectorDescriptor),sizeof(SectorDescriptor),(uint8_t*)&desc);
+       desc.metadata.bits.lastDesc = 1;
    }
    else
    {
@@ -545,8 +519,24 @@ FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint
 	   header.metadata.bits.emptyEU = 0;
 	   flash_write(BLOCK_SIZE*euIndex,sizeof(EraseUnitHeader),(uint8_t*)&header);
    }
-   ObsoleteLogEntry(&entry,sizeof(AddFileEntry));
 
+   strncpy(desc.fileName,filename,FILE_NAME_MAX_LEN);
+   desc.offset = gEUList[euIndex].nextFreeOffset - length;
+   desc.size = length;
+
+   //write entire descriptor
+   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
+   //mark descriptor metadata as valid
+   desc.metadata.bits.validOffset = 0;
+   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
+
+
+   //write file content
+   flash_write(dataAddr,length,(uint8_t*)data);
+   //mark entire file as valid
+   desc.metadata.bits.validDesc = 0;
+   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
+      
    gEUList[euIndex].bytesFree -= (sizeof(SectorDescriptor) + length);
    gEUList[euIndex].nextFreeOffset-=length;
    gEUList[euIndex].totalDescriptors++;
@@ -560,7 +550,7 @@ bool findFreeSector(uint16_t fileSize,uint8_t* euIndex)
    uint8_t i;
    for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
    {
-	  if (gLog.logEUListIndex != i && gEUList[i].bytesFree >= fileSize + sizeof(SectorDescriptor))
+	  if (gLogIndex != i && gEUList[i].bytesFree >= (fileSize + sizeof(SectorDescriptor)))
       {
          *euIndex = i;
          return true;
@@ -568,6 +558,7 @@ bool findFreeSector(uint16_t fileSize,uint8_t* euIndex)
    }
    return false;
 }
+
 //first fit algo
 FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 {
@@ -592,12 +583,14 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 
    if (findFreeSector(length,&euIndex))
    {
-      return writeFile(filename,length,data,euIndex);
+        eraseFileFromFS(filename);
+        return writeFile(filename,length,data,euIndex);
    }
-   else //if (relocateBlock(&euIndex))
+   else //if (relocateBlock(&euIndex)) - find if compaction will lead to succesful insertion
    {
-      //...
-      return SUCCESS;
+        eraseFileFromFS(filename);
+        //...
+        return SUCCESS;
    }
    
    return MAXIMUM_FLASH_SIZE_EXCEEDED;
@@ -653,7 +646,7 @@ FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,ui
    for(euIdx = 0 ; euIdx < ERASE_UNITS_NUMBER ; ++euIdx)
    {
       //skip the log EU
-      if (gLog.logEUListIndex == euIdx)
+      if (gLogIndex == euIdx)
       {
          continue;
       }
@@ -731,7 +724,7 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data)
    
 }
 
-FS_STATUS fs_erase(const char* filename)
+FS_STATUS eraseFileFromFS(const char* filename)
 {
    SectorDescriptor sec;
    FS_STATUS status;
@@ -749,8 +742,21 @@ FS_STATUS fs_erase(const char* filename)
 
    flash_write(BLOCK_SIZE*secEuIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*actualSecIndex,sizeof(SectorDescriptor),(uint8_t*)&sec); //TODO retvalue
 
+   --gEUList[secEuIndex].validDescriptors;
+   gEUList[secEuIndex].deleteFilesTotalSize+=(sec.size + sizeof(SectorDescriptor));
+
+
    return SUCCESS;
 
+}
+
+FS_STATUS fs_erase(const char* filename)
+{
+    FS_STATUS status;
+    //take lock
+    status = eraseFileFromFS(filename);
+    //release lock
+    return status;
 }
 
 FS_STATUS fs_count(unsigned* file_count)
@@ -759,12 +765,13 @@ FS_STATUS fs_count(unsigned* file_count)
    *file_count = gFilesCount;
 }
 
-FS_STATUS fs_list(unsigned length, char* files)
+FS_STATUS fs_list(unsigned* length, char* files)
 {
    SectorDescriptor secDesc;
-   uint16_t secIdx,lastActualSecIdx,ansIndex;
+   uint16_t secIdx,lastActualSecIdx,ansIndex = 0;
    bool found = false;
    uint8_t euIdx;
+   uint8_t filenameLen;
    char fsFilename[FILE_NAME_MAX_LEN+1] = {'\0'};
 
    if (files == NULL)
@@ -775,7 +782,7 @@ FS_STATUS fs_list(unsigned length, char* files)
    for(euIdx = 0 ; euIdx < ERASE_UNITS_NUMBER ; ++euIdx)
    {
       //skip the log EU
-	   if (gLog.logEUListIndex == euIdx || gEUList[euIdx].validDescriptors == 0)
+	   if (gLogIndex == euIdx || gEUList[euIdx].validDescriptors == 0)
       {
          continue;
       }
@@ -785,23 +792,21 @@ FS_STATUS fs_list(unsigned length, char* files)
       for(secIdx = 0 ; secIdx < gEUList[euIdx].validDescriptors ; ++secIdx)
       {
          getSectorDescriptorByIndices(euIdx,secIdx,&lastActualSecIdx,&secDesc);
-		 
-         
+         strncpy(fsFilename,secDesc.fileName,FILE_NAME_MAX_LEN);
+         filenameLen = strlen(fsFilename);
+
+         if ((ansIndex + filenameLen + 1) > *length)
+         {
+             return FAILURE;
+         }
+         strcpy(&files[ansIndex],fsFilename);
+         ansIndex+=(filenameLen+1);//+1 for the terminator \0
       }
    }
 
-   if (found)
-   {
-      if (pEuIndex != NULL)
-      {
-         *pEuIndex = euIdx;
-      }
-      if (pSecActualIndex != NULL)
-      {
-         *pSecActualIndex = lastActualSecIdx;
-      }
-   }
-   //take the lock
+   *length  = (ansIndex+1);
+
+   
    return SUCCESS;
 }
 
@@ -817,29 +822,43 @@ void test()
    char data6[MAX_FILE_SIZE] = {'f'};
 
    char data[MAX_FILE_SIZE];
+   char filenames[(FILE_NAME_MAX_LEN+1)*1000];
+   unsigned filenamesSize = (FILE_NAME_MAX_LEN+1)*1000;
    uint32_t fileSize;
+   uint32_t i;
 
    loadFilesystem();
 
-   /*fs_write("file_a",1,data1);
+   /*for(i = 0 ; i < 1000 ; ++i)
+   {
+       status = fs_write("file_a",0,data1);
+       if (status != SUCCESS)
+       {
+           i = i;
+       }
+   }*/
+
+   fs_write("file_a",1,data1);
    fs_write("file_b",1,data2);
    fs_write("file_c",1,data3);
    fs_write("file_d",1,data4);
    fs_write("file_e",1,data5);
    fs_write("file_f",1,data6);
 
-   fs_read("file_a",&fileSize,data);
+   /*fs_read("file_a",&fileSize,data);
    fs_read("file_b",&fileSize,data);
    fs_read("file_c",&fileSize,data);
    fs_read("file_d",&fileSize,data);
    fs_read("file_e",&fileSize,data);
    fs_read("file_f",&fileSize,data);
-   fs_read("file_g",&fileSize,data);*/
+   fs_read("file_g",&fileSize,data);
 
-   /*fs_erase("file_a");
+   fs_erase("file_a");
    fs_erase("file_t");
-   fs_read("file_a",&fileSize,data);
-   */
+   fs_read("file_a",&fileSize,data);*/
+
+   fs_list(&filenamesSize,filenames);
+   
    
    /*
    LogEntry e = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};

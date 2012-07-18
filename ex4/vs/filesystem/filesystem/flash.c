@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#define IMAGE_PATH "c:\\development\\embsys\\ex4\\flash.img"
+#define IMAGE_PATH "d:\\development\\embsys\\ex4\\flash.img"
 
 char flash[FLASH_SIZE];
 bool flashInUse = false;
