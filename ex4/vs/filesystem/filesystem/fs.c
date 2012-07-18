@@ -597,27 +597,23 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 }
 
 //assumption, file exist i.e euIndex is valid and not log and validSectorIndex <= number of valid files per this EU.
-FS_STATUS getSectorDescriptorByIndices(uint8_t euIndex,uint16_t validSectorIndex,uint16_t* pPrevActualSectorIndex,SectorDescriptor* pSecDesc)
+FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSectorIndex,SectorDescriptor* pSecDesc)
 {
 
-   uint16_t address,sectorIndexInc = 0;
+   uint16_t baseAddress = BLOCK_SIZE*euIndex,secDescOffset = sizeof(EraseUnitHeader) ,sectorIndexInc = 0;
    
-   if (pPrevActualSectorIndex != NULL && *pPrevActualSectorIndex !=0)
+   if (pPrevActualSectorIndex != NULL && *pPrevActualSectorIndex > 0)
    {
-      address = BLOCK_SIZE*euIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*(*pPrevActualSectorIndex);
+      secDescOffset += sizeof(SectorDescriptor)*(*pPrevActualSectorIndex + 1);
+       ++sectorIndexInc;
    }
-   else
-   {
-      address = BLOCK_SIZE*euIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*validSectorIndex;
-   }
-
 
    do
    {
-      flash_read(address,sizeof(SectorDescriptor),(uint8_t*)pSecDesc);
-      address+=sizeof(SectorDescriptor);
+      flash_read(baseAddress + secDescOffset,sizeof(SectorDescriptor),(uint8_t*)pSecDesc);
+      secDescOffset+=sizeof(SectorDescriptor);
       ++sectorIndexInc;
-   }while(pSecDesc->metadata.bits.validDesc != 0 || pSecDesc->metadata.bits.obsoleteDes == 0);
+   }while(pSecDesc->metadata.bits.validDesc != 0 || pSecDesc->metadata.bits.obsoleteDes == 0 && secDescOffset + sizeof(SectorDescriptor) < BLOCK_SIZE);
 
    //cancle last increment, since we want the actual index of the current file and not the next
    --sectorIndexInc;
@@ -655,7 +651,7 @@ FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,ui
 
       for(secIdx = 0 ; secIdx < gEUList[euIdx].validDescriptors ; ++secIdx)
       {
-         getSectorDescriptorByIndices(euIdx,secIdx,&lastActualSecIdx,pSecDesc);
+         getNextValidSectorDescriptor(euIdx,&lastActualSecIdx,pSecDesc);
          if (isFilenameMatchs(pSecDesc,filename))
          {
             found = true;
@@ -791,7 +787,7 @@ FS_STATUS fs_list(unsigned* length, char* files)
 
       for(secIdx = 0 ; secIdx < gEUList[euIdx].validDescriptors ; ++secIdx)
       {
-         getSectorDescriptorByIndices(euIdx,secIdx,&lastActualSecIdx,&secDesc);
+         getNextValidSectorDescriptor(euIdx,&lastActualSecIdx,&secDesc);
          strncpy(fsFilename,secDesc.fileName,FILE_NAME_MAX_LEN);
          filenameLen = strlen(fsFilename);
 
@@ -804,7 +800,7 @@ FS_STATUS fs_list(unsigned* length, char* files)
       }
    }
 
-   *length  = (ansIndex+1);
+   *length  = ansIndex;
 
    
    return SUCCESS;
@@ -856,7 +852,7 @@ void test()
    fs_erase("file_a");
    fs_erase("file_t");
    fs_read("file_a",&fileSize,data);*/
-
+   filenamesSize = 42;
    fs_list(&filenamesSize,filenames);
    
    
