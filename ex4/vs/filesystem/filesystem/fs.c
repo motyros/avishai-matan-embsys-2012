@@ -10,10 +10,12 @@
 #define FILE_NOT_FOUND_EU_INDEX ERASE_UNITS_NUMBER
 //TODO add global mutex, try to take it with TX_NO_WAIT value (failure = not ready)
 
+#define CANARY_VALUE 0xDEADBEEF
+
 typedef enum
 {
-	LOG		= 0,
-	DATA	= 1,
+	DATA		= 0,
+	LOG			= 1,
 }EraseUnitType;
 
 typedef enum
@@ -26,6 +28,7 @@ typedef enum
 
 #pragma pack(1)
 
+/*
 typedef union
 {
 	uint8_t data[5];
@@ -41,24 +44,27 @@ typedef union
       }metadata;
 	}bytes;
 }HeaderTemp;
+*/
+typedef union
+{
+	uint8_t data;
+	struct
+	{
+		uint8_t type		   : 1; //log = 0, sectors = 1
+		uint8_t emptyEU		   : 1; //1 = yes, 0 = no
+		uint8_t valid		   : 1; // whole eu valid
+		//uint8_t obsolete     : 1; // whole eu oblolete
+		uint8_t	reserved	   : 5;
+	} bits;
+}EraseUnitMetadata;
 
 typedef struct
 {
-	union
-	{
-		uint8_t data;
-		struct
-		{
-			uint8_t type		   : 1; //log = 0, sectors = 1
-			uint8_t lastHeader   : 1; //1 = yes, 0 = no
-			uint8_t valid		   : 1; // whole eu valid
-         uint8_t obsolete     : 1; // whole eu oblolete
-			uint8_t	reserved	   : 4;
-		} bits;
-	}metadata;
+	EraseUnitMetadata metadata;
 
 	uint32_t eraseNumber;
 
+	uint32_t canary;
 	//this section should store the index of the new log and the new EraseNumber of EU[index]. this data important
 	//in case of crash during log update, this info will enable to continue the operation.
 
@@ -67,12 +73,15 @@ typedef struct
 
 	//from log erase to log erase we can be sure that free temp will be available because to make log full, the number
 	//of required operation will cause more than one block to be zeroed (will create available temp)
-	HeaderTemp temp;
+	//HeaderTemp temp;
 }EraseUnitHeader;
 
 typedef struct
 {
+	//offset of the file's data from the beginning of the block
 	uint16_t offset;
+
+	//file's data's size
 	uint16_t size;
 
 	union
@@ -80,11 +89,13 @@ typedef struct
 		uint8_t data;
 		struct
 		{
+			//indication whether this secctor desciptor is the last one
 			uint8_t lastDesc		:	1;
-			uint8_t validDesc	   :	1;
-			uint8_t obsoleteDes	:	1;
-         uint8_t validOffset	:	1;
-         uint8_t	reserved	   :  4;
+			uint8_t validDesc	    :	1;
+			uint8_t obsoleteDes		:	1;
+			//indication whether the size and the offset of the file are valid
+			uint8_t validOffset		:	1;
+			uint8_t	reserved	    :   4;
 		} bits;
 	}metadata;
 
@@ -92,6 +103,25 @@ typedef struct
 
 }SectorDescriptor;
 
+typedef union
+{
+	uint32_t data;
+	struct
+	{
+		//index of the block we are going erase
+		uint32_t euIndex		: 4;
+		//new erase number of the block euIndex
+		uint32_t eraseNumber	: 25;
+		//is LogEntry valid
+		uint32_t valid			: 1;
+		//0 if we finished to copy euIndex to the log's EU
+		uint32_t copyComplete	: 1;
+		//0 if we erased the euIndex
+		uint32_t eraseComplete	: 1;
+	} bits;
+}LogEntry;
+
+/*
 typedef struct
 {
    uint16_t valid       : 1;
@@ -131,102 +161,107 @@ typedef union
 
    MoveBlockEntry moveBlock;
 }LogEntry;
-
+*/
 
 #pragma pack()
 
 typedef struct
 {
 	uint32_t eraseNumber;
-   uint16_t bytesFree;
+    //the actual free bytes
+	uint16_t bytesFree;
+	//the number of bytes we will earn during eviction
+	uint16_t deleteFilesTotalSize;
+	//how many files exist in this EU
 	uint16_t validDescriptors;
-	uint16_t nextFreeOffset;
-   uint16_t totalDescriptors;
+	//how many non empty descriptors exist
+    uint16_t totalDescriptors;
 	
-   union
-	{
-		uint8_t data;
-		struct
-		{
-			uint8_t type		   : 1; //log = 0, sectors = 1
-			uint8_t lastHeader   : 1; //1 = yes, 0 = no
-			uint8_t valid		   : 1; // whole eu valid
-         uint8_t obsolete     : 1; // whole eu oblolete
-			uint8_t	reserved	   : 4;
-		} bits;
-	}metadata;
+	//what is the next offset (upper bound) to write data to
+	uint16_t nextFreeOffset;
+	
+    EraseUnitMetadata metadata;
 
-}EraseUnitLogicalMetadata;
+}EraseUnitLogicalHeader;
 
 
 
+//hold the data we need about every EraseUnit. will save flash IO operations
+EraseUnitLogicalHeader gEUList[ERASE_UNITS_NUMBER];
 
-EraseUnitLogicalMetadata gEUList[ERASE_UNITS_NUMBER];
 
-typedef struct
-{
-	uint16_t logEntryOffset;
-	uint8_t logEUListIndex;
-
-}Log;
-
-Log gLog;
+uint8_t gLogIndex;
 uint16_t gFilesCount = 0;
 
 //if no log found during initilization, erase the whole flash and install the filesystem
 
 
-void intstallFileSystem()
+/*
+ * install FileSystem on the flash. all previouse content will be deleted
+ */
+FS_STATUS intstallFileSystem()
 {
+	
 	int i;
 	uint16_t euAddress = 0;
-   EraseUnitHeader header;
+    
+	EraseUnitHeader header;
 
-   memset(&header,0xFF,sizeof(EraseUnitHeader));
+    memset(&header,0xFF,sizeof(EraseUnitHeader));
 
+	header.canary = CANARY_VALUE;
 	header.eraseNumber = 0;
-	header.metadata.bits.type = DATA;
-   header.metadata.bits.valid = 0;
+	header.metadata.bits.type = LOG;
+
+	header.metadata.bits.emptyEU = 1;
+
 	//1. erase the whole flash
 	flash_bulk_erase_start();
 	wait_for_flash_done;
-	//2. write each EraseUnit header + logical metadata
-	for(i = 0 ; i < (ERASE_UNITS_NUMBER-1) ; ++i)
+	
+	
+	//2. write each EraseUnitHeader + update the data structure of the EU's logical metadata
+	for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
 	{
-      flash_write(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
+		header.metadata.bits.valid = 1;
+		if (i > 0)
+		{
+			header.metadata.bits.type = DATA;
+		}
+        
+		flash_write(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
+		
+		header.metadata.bits.valid = 0;
+		flash_write(euAddress + MY_OFFSET(EraseUnitHeader,metadata.data),1,(uint8_t*)&header.metadata.data);
+
 		gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader);
 		gEUList[i].eraseNumber = 0;
 		gEUList[i].nextFreeOffset = BLOCK_SIZE;
 		gEUList[i].validDescriptors = 0;
-      gEUList[i].totalDescriptors = 0;
+		gEUList[i].totalDescriptors = 0;
+		gEUList[i].deleteFilesTotalSize = 0;
+		gEUList[i].metadata = header.metadata;
 		euAddress+=BLOCK_SIZE;
 	}
-   header.metadata.bits.valid = 1;
-	//3. write log header + logical metadata
-	header.metadata.bits.type = LOG;
-	flash_write(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
-   header.metadata.bits.valid = 0;
-   flash_write(euAddress + MY_OFFSET(EraseUnitHeader,metadata.data),sizeof(header.metadata.data),&header.metadata.data);
+	
+	gLogIndex = 0;
 
-   gLog.logEUListIndex = i;
-   gLog.logEntryOffset = sizeof(EraseUnitHeader);
-   gFilesCount = 0;
+    gFilesCount = 0;
 }
 
-void ParseEraseUnitContent(uint16_t eraseUnitIndex,uint16_t* validDescriptors,uint16_t* totalDescriptors,uint16_t* dataBytesInUse)
+void ParseEraseUnitContent(uint16_t i)
 {
-   uint16_t baseAddress = eraseUnitIndex*BLOCK_SIZE;
+   uint16_t baseAddress = i*BLOCK_SIZE;
    EraseUnitHeader header;
    SectorDescriptor sd;
 
-   *validDescriptors = 0;
-   *dataBytesInUse = 0;
+   gEUList[i].bytesFree = BLOCK_SIZE - sizeof(EraseUnitHeader);
 
 
 
    flash_read(baseAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
 
-   if (header.metadata.bits.lastHeader == 0) //there are some Sector Desciptors
+   if (header.metadata.bits.emptyEU == 0) //there are some Sector Desciptors
    {
       baseAddress += sizeof(EraseUnitHeader);
 
@@ -252,7 +287,7 @@ void ParseEraseUnitContent(uint16_t eraseUnitIndex,uint16_t* validDescriptors,ui
    }
 }
 
-void handleLogSelfMigration(uint8_t headerHostIndex,HeaderTemp h)
+/*void handleLogSelfMigration(uint8_t headerHostIndex,HeaderTemp h)
 {
    EraseUnitHeader header = {0xFF};
 
@@ -280,6 +315,7 @@ void handleLogSelfMigration(uint8_t headerHostIndex,HeaderTemp h)
    gLog.logEntryOffset = sizeof(EraseUnitHeader);
 
 }
+*/
 
 bool isUninitializeSegment(uint8_t* pSeg,uint32_t size)
 {
@@ -294,11 +330,14 @@ bool isUninitializeSegment(uint8_t* pSeg,uint32_t size)
    return true;
 }
 
+/*
 void parseLog()
 {
    LogEntry e;
    LogEntry lastEntry;
    uint16_t entryBaseLine = gLog.logEUListIndex * BLOCK_SIZE;
+
+   gLog.logEntryOffset = sizeof(EraseUnitHeader);
 
    while(gLog.logEntryOffset + sizeof(LogEntry) < BLOCK_SIZE)
    {
@@ -322,64 +361,74 @@ void parseLog()
    //TODO if last entry is valid and not obsolete, act accordingly
 
 }
+*/
 //this function loads filesystem structure from FLASH
 //need to verify that:
 // 1. only one valid log exists
 // 2. log is empty or last log entry is obsolete (we didn't crash in the middle of an operation)
 void loadFilesystem()
 {
-	uint8_t i,firstLogIndex,secondLogIndex,tempHostIndex = 0;
+	uint8_t corruptedCanariesCount = 0,i,firstLogIndex,secondLogIndex;
+	uint8_t logCount = 0;
 	uint16_t euAddress = 0;
-   HeaderTemp headerTemp;
-   EraseUnitHeader header;
-   bool logExists = false;
-   bool logExistsTwice = false;
-   bool headerTempFound = false;
-
-   flash_init(NULL,NULL);
-
-   memset(gEUList,0x00,sizeof(gEUList));
-
 	
+    EraseUnitHeader header;
+    
 
+    flash_init(NULL,NULL);
 
+    memset(gEUList,0x00,sizeof(gEUList));
 
 	for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
 	{
-      uint16_t dataBytesInUse = 0;
+		uint16_t dataBytesInUse = 0;
 		flash_read(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
       
-      if (header.temp.bytes.metadata.valid == 0 && header.temp.bytes.metadata.obsolete == 1)
-      {
-         headerTemp = header.temp;
-         headerTempFound = true;
-         tempHostIndex = i;
-      }
+		if (header.metadata.bits.valid == 1 || header.canary != CANARY_VALUE)
+		{
+			++corruptedCanariesCount;
+			if (corruptedCanariesCount > 1)
+			{
+				break;
+			}
+			euAddress+=BLOCK_SIZE;
+			continue;
+		}
+      
+		gEUList[i].eraseNumber = header.eraseNumber;
+		gEUList[i].metadata.data = header.metadata.data;
+		
+		//if we found valid log
+		if (header.metadata.bits.type == LOG)
+		{
+			logCount++;
 
-      gEUList[i].eraseNumber = header.eraseNumber;
-      gEUList[i].metadata.data = header.metadata.data;
-	
-      //if we found valid log
-      if (header.metadata.bits.type == LOG && header.metadata.bits.valid == 0 && header.metadata.bits.obsolete == 1)
-      {
-         if (logExists)
-         {
-            logExistsTwice = true;
-            secondLogIndex = i;
-            }
-         else
-         {
-            logExists = true;
-            firstLogIndex = i;
-         }
-      }
+			if (logCount > 2)
+			{
+				break;
+			}
 
-      if (header.metadata.bits.valid == 0 && header.metadata.bits.obsolete == 1)
-      {
-         ParseEraseUnitContent(i,&gEUList[i].validDescriptors,&gEUList[i].validDescriptors,&dataBytesInUse);
-         gEUList[i].nextFreeOffset = BLOCK_SIZE - dataBytesInUse;
-         gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader) - sizeof(SectorDescriptor)*gEUList[i].validDescriptors - dataBytesInUse;
-      }
+			if (logCount == 2)
+			{
+				secondLogIndex = i;
+			}
+			else
+			{
+				firstLogIndex = i;
+			}
+		}
+		//regular sector
+		else
+		{
+			ParseEraseUnitContent(i);
+		}
+
+		if (header.metadata.bits.valid == 0 && header.metadata.bits.obsolete == 1)
+		{
+			ParseEraseUnitContent(i,&gEUList[i].validDescriptors,&gEUList[i].validDescriptors,&dataBytesInUse);
+			gEUList[i].nextFreeOffset = BLOCK_SIZE - dataBytesInUse;
+			gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader) - sizeof(SectorDescriptor)*gEUList[i].validDescriptors - dataBytesInUse;
+		}
 
       gFilesCount+=gEUList[i].validDescriptors;
       
@@ -388,17 +437,19 @@ void loadFilesystem()
 	}
 
    //if no log found, fs not exist, create one
-   if (!logExists && headerTempFound == false)
+   if (logCount == 0 || logCount > 2)
    {
       intstallFileSystem();
    }
 
+   
    if (headerTempFound)
    {
       handleLogSelfMigration(tempHostIndex,headerTemp);
    }
-   else
+   else if (logExists)
    {
+	  gLog.logEUListIndex = firstLogIndex;
       parseLog();
    }
    
@@ -415,27 +466,7 @@ FS_STATUS fs_init(const FS_SETTINGS settings)
 }
 
 
-void test()
-{
-   int a = MY_OFFSET(EraseUnitHeader,eraseNumber);
-   a = MY_OFFSET(EraseUnitHeader,metadata.data);
-   loadFilesystem();
-   loadFilesystem();
-   /*
-   LogEntry e = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
-   int a = sizeof(LogEntry);
 
-   e.moveBlock.eraseNumber = 0;
-   e.moveBlock.bits1.blockBeenDeleted = 0;
-   e.moveBlock.bits1.obsolete = 0;
-   e.moveBlock.bits1.sectorToStart = 0;
-   e.moveBlock.bits1.type = 0;
-   e.moveBlock.bits1.valid = 0;
-   e.moveBlock.bits2.euFromIndex = 0;
-   e.moveBlock.bits2.euToIndex = 0;
-   */
-
-}
 void AddLogEntry(LogEntry* pEntry,uint16_t size)
 {
    uint16_t entryAbsAddr;
@@ -466,7 +497,7 @@ void ObsoleteLogEntry(LogEntry* pEntry,uint16_t size)
    flash_write(BLOCK_SIZE*gLog.logEUListIndex + gLog.logEntryOffset - size,size,(uint8_t*)pEntry);
 }
 
-void writeFile(const char* filename, unsigned length, const char* data,uint8_t euIndex)
+FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint8_t euIndex)
 {
    LogEntry entry;
 
@@ -475,6 +506,8 @@ void writeFile(const char* filename, unsigned length, const char* data,uint8_t e
    uint16_t dataAddr = BLOCK_SIZE*euIndex + gEUList[euIndex].nextFreeOffset - length;
 
    SectorDescriptor desc;
+
+   EraseUnitHeader header;
 
    memset(&entry,0xFF,sizeof(LogEntry));
    memset(&desc,0xFF,sizeof(SectorDescriptor));
@@ -499,10 +532,19 @@ void writeFile(const char* filename, unsigned length, const char* data,uint8_t e
       
 
    //mark prev sector as non last
-   memset(&desc,0xFF,sizeof(SectorDescriptor));
-   desc.metadata.bits.lastDesc = 0;
-   flash_write(sectorDescAddr - sizeof(SectorDescriptor),sizeof(SectorDescriptor),(uint8_t*)&desc);
+   if (gEUList[euIndex].totalDescriptors != 0)
+   {
 
+	   memset(&desc,0xFF,sizeof(SectorDescriptor));
+	   desc.metadata.bits.lastDesc = 0;
+	   flash_write(sectorDescAddr - sizeof(SectorDescriptor),sizeof(SectorDescriptor),(uint8_t*)&desc);
+   }
+   else
+   {
+	   memset(&header,0xFF,sizeof(EraseUnitHeader));
+	   header.metadata.bits.emptyEU = 0;
+	   flash_write(BLOCK_SIZE*euIndex,sizeof(EraseUnitHeader),(uint8_t*)&header);
+   }
    ObsoleteLogEntry(&entry,sizeof(AddFileEntry));
 
    gEUList[euIndex].bytesFree -= (sizeof(SectorDescriptor) + length);
@@ -510,6 +552,7 @@ void writeFile(const char* filename, unsigned length, const char* data,uint8_t e
    gEUList[euIndex].totalDescriptors++;
    gEUList[euIndex].validDescriptors++;
 
+   return SUCCESS;
 }
 
 bool findFreeSector(uint16_t fileSize,uint8_t* euIndex)
@@ -517,7 +560,7 @@ bool findFreeSector(uint16_t fileSize,uint8_t* euIndex)
    uint8_t i;
    for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
    {
-      if (gLog.logEntryOffset != i && gEUList[i].bytesFree >= fileSize + sizeof(SectorDescriptor))
+	  if (gLog.logEUListIndex != i && gEUList[i].bytesFree >= fileSize + sizeof(SectorDescriptor))
       {
          *euIndex = i;
          return true;
@@ -549,8 +592,7 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 
    if (findFreeSector(length,&euIndex))
    {
-      //...
-      return SUCCESS;
+      return writeFile(filename,length,data,euIndex);
    }
    else //if (relocateBlock(&euIndex))
    {
@@ -583,6 +625,9 @@ FS_STATUS getSectorDescriptorByIndices(uint8_t euIndex,uint16_t validSectorIndex
       address+=sizeof(SectorDescriptor);
       ++sectorIndexInc;
    }while(pSecDesc->metadata.bits.validDesc != 0 || pSecDesc->metadata.bits.obsoleteDes == 0);
+
+   //cancle last increment, since we want the actual index of the current file and not the next
+   --sectorIndexInc;
 
    if (pPrevActualSectorIndex != NULL)
    {
@@ -716,5 +761,98 @@ FS_STATUS fs_count(unsigned* file_count)
 
 FS_STATUS fs_list(unsigned length, char* files)
 {
+   SectorDescriptor secDesc;
+   uint16_t secIdx,lastActualSecIdx,ansIndex;
+   bool found = false;
+   uint8_t euIdx;
+   char fsFilename[FILE_NAME_MAX_LEN+1] = {'\0'};
+
+   if (files == NULL)
+   {
+	   return COMMAND_PARAMETERS_ERROR;
+   }
+
+   for(euIdx = 0 ; euIdx < ERASE_UNITS_NUMBER ; ++euIdx)
+   {
+      //skip the log EU
+	   if (gLog.logEUListIndex == euIdx || gEUList[euIdx].validDescriptors == 0)
+      {
+         continue;
+      }
+
+      lastActualSecIdx = 0;
+
+      for(secIdx = 0 ; secIdx < gEUList[euIdx].validDescriptors ; ++secIdx)
+      {
+         getSectorDescriptorByIndices(euIdx,secIdx,&lastActualSecIdx,&secDesc);
+		 
+         
+      }
+   }
+
+   if (found)
+   {
+      if (pEuIndex != NULL)
+      {
+         *pEuIndex = euIdx;
+      }
+      if (pSecActualIndex != NULL)
+      {
+         *pSecActualIndex = lastActualSecIdx;
+      }
+   }
+   //take the lock
    return SUCCESS;
+}
+
+
+void test()
+{
+   FS_STATUS status;
+   char data1[MAX_FILE_SIZE] = {'a'};
+   char data2[MAX_FILE_SIZE] = {'b'};
+   char data3[MAX_FILE_SIZE] = {'c'};
+   char data4[MAX_FILE_SIZE] = {'d'};
+   char data5[MAX_FILE_SIZE] = {'e'};
+   char data6[MAX_FILE_SIZE] = {'f'};
+
+   char data[MAX_FILE_SIZE];
+   uint32_t fileSize;
+
+   loadFilesystem();
+
+   /*fs_write("file_a",1,data1);
+   fs_write("file_b",1,data2);
+   fs_write("file_c",1,data3);
+   fs_write("file_d",1,data4);
+   fs_write("file_e",1,data5);
+   fs_write("file_f",1,data6);
+
+   fs_read("file_a",&fileSize,data);
+   fs_read("file_b",&fileSize,data);
+   fs_read("file_c",&fileSize,data);
+   fs_read("file_d",&fileSize,data);
+   fs_read("file_e",&fileSize,data);
+   fs_read("file_f",&fileSize,data);
+   fs_read("file_g",&fileSize,data);*/
+
+   /*fs_erase("file_a");
+   fs_erase("file_t");
+   fs_read("file_a",&fileSize,data);
+   */
+   
+   /*
+   LogEntry e = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+   int a = sizeof(LogEntry);
+
+   e.moveBlock.eraseNumber = 0;
+   e.moveBlock.bits1.blockBeenDeleted = 0;
+   e.moveBlock.bits1.obsolete = 0;
+   e.moveBlock.bits1.sectorToStart = 0;
+   e.moveBlock.bits1.type = 0;
+   e.moveBlock.bits1.valid = 0;
+   e.moveBlock.bits2.euFromIndex = 0;
+   e.moveBlock.bits2.euToIndex = 0;
+   */
+
 }

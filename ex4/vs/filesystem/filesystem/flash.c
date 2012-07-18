@@ -2,18 +2,18 @@
 #include <string.h>
 #include <stdio.h>
 
-
+#define IMAGE_PATH "c:\\development\\embsys\\ex4\\flash.img"
 
 char flash[FLASH_SIZE];
 bool flashInUse = false;
 
 void ensureFlashExist()
 {
-   FILE* f = fopen("d:\\development\\embsys\\ex4\\flash.img","r");
+   FILE* f = fopen(IMAGE_PATH,"r");
    char a = '\0';
    if (f == NULL)
    {
-      f = fopen("d:\\development\\embsys\\ex4\\flash.img","w+");
+      f = fopen(IMAGE_PATH,"w+");
       fseek(f,64*1024-1,SEEK_SET);
       fwrite(&a,1,1,f);
       fclose(f);
@@ -28,7 +28,7 @@ result_t flash_init( void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32
 {
    FILE* f;
    ensureFlashExist();
-   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r");
+   f = fopen(IMAGE_PATH,"r");
    fread(flash,64*1024,1,f);
    fclose(f);
 
@@ -183,9 +183,9 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
    {
       flash[start_address + i ] &= buffer[i]; //nor flash can turn off bits only
    }
-   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r+");
+   f = fopen(IMAGE_PATH,"r+");
    fseek(f,start_address,SEEK_SET);
-   fwrite(buffer,1,size,f);
+   fwrite(&flash[start_address],1,size,f);
    fclose(f);
    flashInUse = false;
 
@@ -217,7 +217,7 @@ result_t flash_bulk_erase_start(void)
 
    flashInUse = true;
    memset(flash,0xFF,FLASH_SIZE);
-   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r+");
+   f = fopen(IMAGE_PATH,"r+");
    fwrite(flash,1,sizeof(flash),f);
    fclose(f);
    flashInUse = false;
@@ -252,7 +252,7 @@ result_t flash_block_erase_start(uint16_t start_address)
    flashInUse = true;
    start_address = (start_address/BLOCK_SIZE)*BLOCK_SIZE;
    memset(&flash[start_address],0xFF,BLOCK_SIZE);
-   f = fopen("d:\\development\\embsys\\ex4\\flash.img","r+");
+   f = fopen(IMAGE_PATH,"r+");
    fseek(f,start_address,SEEK_SET);
    fwrite(&flash[start_address],1,BLOCK_SIZE,f);
    fclose(f);
