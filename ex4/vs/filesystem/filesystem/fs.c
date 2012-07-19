@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "flash.h"
+#include "common_defs.h"
 #include <string.h>
 
 #define FILE_NAME_MAX_LEN (8)
@@ -8,43 +9,25 @@
 #define MAX_FILE_SIZE 512
 #define MAX_FILES_CAPACITY 1000
 #define FILE_NOT_FOUND_EU_INDEX ERASE_UNITS_NUMBER
+
 //TODO add global mutex, try to take it with TX_NO_WAIT value (failure = not ready)
 
 #define CANARY_VALUE 0xDEADBEEF
 
+//types of BLOCK
 typedef enum
 {
-	DATA		= 0,
-	LOG			= 1,
+	DATA		= 0, 
+	LOG			= 1, //important because we convert LOG block to DATA block and in NOR flash we can convert 1 to zero but not vice versa
 }EraseUnitType;
 
-typedef enum
-{
-   ADD_FILE  = 0,
-   BLOCK_MOVE = 1,
-}LogEntryType;
-
+//calculate the byte offset of field inside a struct
 #define MY_OFFSET(type, field) ((unsigned long ) &(((type *)0)->field))
+#define READ_LOG_ENTRY(logIndex,entry) (flash_read((logIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
+#define WRITE_LOG_ENTRY(logIndex,entry) (flash_write((logIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
 
 #pragma pack(1)
 
-/*
-typedef union
-{
-	uint8_t data[5];
-	struct
-	{
-		uint32_t logEraseNumber;
-      struct
-      {
-         uint8_t logEuIndex   : 5; //what is the index of the new log
-         uint8_t valid        : 1;
-         uint8_t obsolete     : 1;
-         uint8_t logBeenErase : 1; //the new log has been erased already
-      }metadata;
-	}bytes;
-}HeaderTemp;
-*/
 typedef union
 {
 	uint8_t data;
@@ -53,7 +36,6 @@ typedef union
 		uint8_t type		   : 1; //log = 0, sectors = 1
 		uint8_t emptyEU		   : 1; //1 = yes, 0 = no
 		uint8_t valid		   : 1; // whole eu valid
-		//uint8_t obsolete     : 1; // whole eu oblolete
 		uint8_t	reserved	   : 5;
 	} bits;
 }EraseUnitMetadata;
@@ -65,15 +47,7 @@ typedef struct
 	uint32_t eraseNumber;
 
 	uint32_t canary;
-	//this section should store the index of the new log and the new EraseNumber of EU[index]. this data important
-	//in case of crash during log update, this info will enable to continue the operation.
 
-	//when searching for "free" temp, zero all none 0xFF... temp values. if current temp & our temp value == our value, use it
-	//this will solve the case when system crashes after writing temp, and eventually we will run out free temps.
-
-	//from log erase to log erase we can be sure that free temp will be available because to make log full, the number
-	//of required operation will cause more than one block to be zeroed (will create available temp)
-	//HeaderTemp temp;
 }EraseUnitHeader;
 
 typedef struct
@@ -121,48 +95,6 @@ typedef union
 	} bits;
 }LogEntry;
 
-/*
-typedef struct
-{
-   uint16_t valid       : 1;
-   uint16_t obsolete    : 1;
-   uint16_t type        : 1;
-   uint16_t euIndex     : 4;
-   uint16_t sectorIndex : 9;
-}AddFileEntry;
-
-typedef struct
-{
-   uint32_t eraseNumber;
-      
-   struct
-   {
-      uint16_t valid             : 1;
-      uint16_t obsolete          : 1;
-      uint16_t type              : 1;
-      uint16_t blockBeenDeleted  : 1;
-      uint16_t sectorToStart     : 9;
-      uint16_t reserved          : 3;
-   }bits1;
-
-   struct
-   {
-      uint8_t euFromIndex       : 4;
-      uint8_t euToIndex         : 4;
-   }bits2;
-}MoveBlockEntry;
-
-typedef union
-{
-
-   uint8_t data[7];
-   
-   AddFileEntry addFile;
-
-   MoveBlockEntry moveBlock;
-}LogEntry;
-*/
-
 #pragma pack()
 
 typedef struct
@@ -185,21 +117,38 @@ typedef struct
 }EraseUnitLogicalHeader;
 
 
+/**** Forward Declaration Begin*****/
+
+
+//TODO make every argument that should not change to const
+
+static FS_STATUS CompleteCompaction(uint8_t firstLogIndex,bool secondLogExists,uint8_t secondLogIndex);
+static FS_STATUS intstallFileSystem();
+static FS_STATUS ParseEraseUnitContent(uint16_t i);
+static bool isUninitializeSegment(uint8_t* pSeg,uint32_t size);
+static void CorrectLogEntry(LogEntry* pEntry);
+static FS_STATUS CompleteCompaction(uint8_t firstLogIndex,bool secondLogExists,uint8_t secondLogIndex,bool corruptedEUExists,uint8_t corruptedEUIndex);
+static FS_STATUS loadFilesystem();
+static FS_STATUS createLogEntry(uint8_t euIndexToDelete,uint32_t newEraseNumber);
+static FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint8_t euIndex);
+static bool findFreeEraseUnit(uint16_t fileSize,uint8_t* euIndex);
+static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned length);
+static FS_STATUS CopyDataInsideFlash(uint16_t srcAddr,uint16_t srcSize,uint16_t destAddr);
+static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry);
+
+/**** Forward Declaration End*****/
 
 //hold the data we need about every EraseUnit. will save flash IO operations
-EraseUnitLogicalHeader gEUList[ERASE_UNITS_NUMBER];
+static EraseUnitLogicalHeader gEUList[ERASE_UNITS_NUMBER];
 
-
-uint8_t gLogIndex;
-uint16_t gFilesCount = 0;
-
-//if no log found during initilization, erase the whole flash and install the filesystem
+static uint8_t gLogIndex;
+static uint16_t gFilesCount = 0;
 
 
 /*
  * install FileSystem on the flash. all previouse content will be deleted
  */
-FS_STATUS intstallFileSystem()
+static FS_STATUS intstallFileSystem()
 {
 	
 	int i;
@@ -216,11 +165,16 @@ FS_STATUS intstallFileSystem()
 	header.metadata.bits.emptyEU = 1;
 
 	//1. erase the whole flash
-	flash_bulk_erase_start();
+	if (flash_bulk_erase_start() != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
+
 	wait_for_flash_done;
 	
 	
-	//2. write each EraseUnitHeader + update the data structure of the EU's logical metadata
+	//2. write each EraseUnitHeader + update the data structure of the EU's logical metadata.
+    //the LOG will be placed at the first block.
 	for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
 	{
 		header.metadata.bits.valid = 1;
@@ -237,12 +191,15 @@ FS_STATUS intstallFileSystem()
             gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader) - sizeof(LogEntry);
         }
         
-		flash_write(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
+		if (flash_write(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+        {
+            return FAILURE_ACCESSING_FLASH;
+        }
 		
 		header.metadata.bits.valid = 0;
 		flash_write(euAddress + MY_OFFSET(EraseUnitHeader,metadata.data),1,(uint8_t*)&header.metadata.data);
 
-		
+		//init the DAST which saves data about every EraseUnit (block)
 		gEUList[i].eraseNumber = 0;
 		
 		gEUList[i].validDescriptors = 0;
@@ -257,7 +214,11 @@ FS_STATUS intstallFileSystem()
     gFilesCount = 0;
 }
 
-void ParseEraseUnitContent(uint16_t i)
+/*
+ * parse an EraseUnit on the flash and update the DAST accordingly
+ *
+ */
+static FS_STATUS ParseEraseUnitContent(uint16_t i)
 {
    uint16_t baseAddress = i*BLOCK_SIZE,secDescOffset = sizeof(EraseUnitHeader);
 
@@ -265,7 +226,10 @@ void ParseEraseUnitContent(uint16_t i)
 
    do
    {
-        flash_read(baseAddress+secDescOffset,sizeof(SectorDescriptor),(uint8_t*)&sd);
+        if (flash_read(baseAddress+secDescOffset,sizeof(SectorDescriptor),(uint8_t*)&sd) != OPERATION_SUCCESS)
+        {
+            return FAILURE_ACCESSING_FLASH; 
+        }
         
         //check if we wrote the size and offset succesfully
         if (sd.metadata.bits.validOffset == 0)
@@ -292,39 +256,15 @@ void ParseEraseUnitContent(uint16_t i)
     }while(!sd.metadata.bits.lastDesc && secDescOffset+sizeof(SectorDescriptor) <= BLOCK_SIZE);
 
     gEUList[i].bytesFree -= sizeof(SectorDescriptor)*gEUList[i].totalDescriptors;
+
+    return SUCCESS;
 }
 
-/*void handleLogSelfMigration(uint8_t headerHostIndex,HeaderTemp h)
-{
-   EraseUnitHeader header = {0xFF};
 
-   if (h.bytes.metadata.logBeenErase == 1)
-   {
-      flash_block_erase_start(BLOCK_SIZE * h.bytes.metadata.logEuIndex);
-
-      h.bytes.metadata.logBeenErase = 0;
-
-      //set the logBeenErased bit
-      flash_write(BLOCK_SIZE * headerHostIndex + sizeof(uint32_t),1,(uint8_t*)&h);
-   }
-   
-
-
-   header.eraseNumber = h.bytes.logEraseNumber;
-   header.metadata.bits.type = LOG;
-   //set this entry as obsolete
-   flash_write(BLOCK_SIZE * headerHostIndex,sizeof(EraseUnitHeader),(uint8_t*)&header);
-
-   header.metadata.bits.valid = 0;
-
-   flash_write(BLOCK_SIZE * headerHostIndex,1,(uint8_t*)&header.metadata);
-
-   gLog.logEntryOffset = sizeof(EraseUnitHeader);
-
-}
-*/
-
-bool isUninitializeSegment(uint8_t* pSeg,uint32_t size)
+/*
+ * check if a given data segment is uninitilize (= every byte equals 0xFF)
+ */
+static bool isUninitializeSegment(uint8_t* pSeg,uint32_t size)
 {
    while(size-- != 0)
    {
@@ -337,60 +277,153 @@ bool isUninitializeSegment(uint8_t* pSeg,uint32_t size)
    return true;
 }
 
+
 /*
-void parseLog()
+ * correct invalid LogEntry
+ * assumption: given log entry != uninitilized log entry
+ */
+static void CorrectLogEntry(LogEntry* pEntry)
 {
-   LogEntry e;
-   LogEntry lastEntry;
-   uint16_t entryBaseLine = gLog.logEUListIndex * BLOCK_SIZE;
+    LogEntry entry;
+    uint32_t minEN;
+    uint8_t i;
 
-   gLog.logEntryOffset = sizeof(EraseUnitHeader);
+    //correct only invalid entries
+    if (pEntry->bits.valid != 0)
+    {
+        entry.data = 0xFFFFFFFF;
+        minEN = 0xFFFFFFFF;
 
-   while(gLog.logEntryOffset + sizeof(LogEntry) < BLOCK_SIZE)
-   {
-      flash_read(entryBaseLine + gLog.logEntryOffset,sizeof(LogEntry),(uint8_t*)&e);
-      if (isUninitializeSegment((uint8_t*)&e,sizeof(LogEntry)))
-      {
-         return;
-      }
-      lastEntry = e;
+        //iterate over the LogEntry combinations (erase number + erase unit index)
+        //and check which one might fit the partial log entry we got. choose the one with
+        //minimal EraseNumber in case more than one EraseUnits fit.
+        for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
+        {
+            if (i == gLogIndex)
+            {
+                continue;
+            }
 
-      if (e.addFile.type == ADD_FILE)
-      {
-         gLog.logEntryOffset += sizeof(AddFileEntry);
-      }
-      else
-      {
-         gLog.logEntryOffset += sizeof(MoveBlockEntry);
-      }
-   }
+            //set current EraseUnit info
+            entry.bits.eraseNumber = gEUList[i].eraseNumber + 1;
+            entry.bits.euIndex = i;
 
-   //TODO if last entry is valid and not obsolete, act accordingly
+            //check if pEntry zeros bits are subset of entry
+            if (entry.data & pEntry->data == entry.data && minEN < gEUList[i].eraseNumber)
+            {
+                minEN = gEUList[i].eraseNumber;
+                *pEntry = entry;
+            }
+        }
 
+    }
+
+        
 }
-*/
-//this function loads filesystem structure from FLASH
-//need to verify that:
-// 1. only one valid log exists
-// 2. log is empty or last log entry is obsolete (we didn't crash in the middle of an operation)
-void loadFilesystem()
+
+
+
+/*
+ * check if FS crashed during compaction and if yes, complete the compaction operation
+ */
+static FS_STATUS CompleteCompaction(uint8_t firstLogIndex,bool secondLogExists,uint8_t secondLogIndex,bool corruptedEUExists,uint8_t corruptedEUIndex)
 {
-	uint8_t corruptedCanariesCount = 0,i,firstLogIndex,secondLogIndex;
+    LogEntry firstEntry,secondEntry;
+
+    if (READ_LOG_ENTRY(firstLogIndex,firstEntry) != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
+
+    if (secondLogExists)
+    {
+        
+        if (READ_LOG_ENTRY(secondLogIndex,secondEntry) != OPERATION_SUCCESS)
+        {
+            return FAILURE_ACCESSING_FLASH;
+        }
+
+        //if both entries are uninitilize, no log exist in contradicaion to the fact that 
+        //if two logs exist we are in the middle of Block compaction and one LogEntry must exists
+        if (firstEntry.data == 0xFFFFFFFF && secondEntry.data == 0xFFFFFFFF)
+        {
+            return FAILURE;
+        }
+
+        //if both entries exist, impossible scenario, since before we getting to the state we have two logs
+        //we zero the second "log" and no LogEntry can exist
+        if (firstEntry.data != 0xFFFFFFFF && secondEntry.data != 0xFFFFFFFF)
+        {
+            return FAILURE;
+        }
+
+        //if the first entry is not uninitilize and the second is, this means that firstLogIndex is the real log
+        //and we are trying to erase secondLogIndex
+        if (firstEntry.data != 0xFFFFFFFF)
+        {
+            gLogIndex = firstLogIndex;
+            firstEntry.bits.euIndex = secondLogIndex;
+            firstEntry.bits.valid = 0;
+        }
+        //vice versa
+        else
+        {
+            gLogIndex = secondLogIndex;
+            secondEntry.bits.euIndex = firstLogIndex;
+            secondEntry.bits.valid = 1;
+            
+        }
+
+        //firstEntry will hold the valid data
+        firstEntry.data &= secondEntry.data;
+
+        
+    }
+
+    //no valid entry - FS didn't crash during block compaction, do nothing
+    if (firstEntry.data == 0xFFFFFFFF)
+    {
+        return SUCCESS;
+    }
+
+    //in case of invalid LogEntry
+    CorrectLogEntry(&firstEntry);
+
+    //verify that if coruppted EraseUnit exist, this is indeed the EraseUnit we tried to erase
+    if (corruptedEUExists && firstEntry.bits.euIndex != corruptedEUIndex)
+    {
+        return FAILURE;
+    }
+
+    return CompactBlock(firstEntry.bits.euIndex,firstEntry);
+}
+
+/* 
+ * load FileSystem structure from FLASH. in case of corrupted FS structure, install it from the begginning
+ */
+static FS_STATUS loadFilesystem()
+{
+	uint8_t corruptedCanariesCount = 0,i,firstLogIndex,secondLogIndex,corruptedEUIndex;
 	uint8_t logCount = 0;
 	uint16_t euAddress = 0;
 	
     EraseUnitHeader header;
-    
 
+    //TODO put here some true pointers to cb functions + implementation
     flash_init(NULL,NULL);
 
     memset(gEUList,0x00,sizeof(gEUList));
 
+    //read every EraseUnit header and parse it's SectorDescriptors list
 	for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
 	{
 		uint16_t dataBytesInUse = 0;
-		flash_read(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header);
+		if (flash_read(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+        {
+            return FAILURE_ACCESSING_FLASH;
+        }
       
+        //check for valid header's structure. we allow one courrupted EraseUnit - in case FS crashs during block_erase
 		if (header.metadata.bits.valid == 1 || header.canary != CANARY_VALUE)
 		{
 			++corruptedCanariesCount;
@@ -398,6 +431,7 @@ void loadFilesystem()
 			{
 				break;
 			}
+            corruptedEUIndex = i;
 			euAddress+=BLOCK_SIZE;
 			continue;
 		}
@@ -454,100 +488,134 @@ void loadFilesystem()
    {
        gLogIndex = firstLogIndex;
    }
-   else
-   {
-       //resolve duplicity
-   }
 
-   //cehck if the "true" log has an entry and complete it if needed
+   //if we have two logs, we are in the middle of compaction and at the end of the compaction we will set the true gLogIndex
+   return CompleteCompaction(firstLogIndex,logCount > 1,secondLogIndex,corruptedCanariesCount>0,corruptedEUIndex);
+   
 }
 
 
 FS_STATUS fs_init(const FS_SETTINGS settings)
 {
-   loadFilesystem();
+   (settings);
+   return loadFilesystem();
 }
 
-
-void createLogEntry(uint8_t euIndexToDelete,uint32_t newEraseNumber)
+/*
+ * write new LogEntry with relevant data to the Log
+ */
+static FS_STATUS createLogEntry(uint8_t euIndexToDelete,uint32_t newEraseNumber)
 {
     LogEntry entry;
-    uint16_t entryAbsAddr = (gLogIndex+1)*(BLOCK_SIZE) - sizeof(LogEntry);
 
     memset(&entry,0xFF,sizeof(LogEntry));
 
+    //set relevant info
     entry.bits.euIndex = euIndexToDelete;
     entry.bits.eraseNumber = newEraseNumber;
 
-    flash_write(entryAbsAddr,sizeof(LogEntry),(uint8_t*)&entry);
+    //write entry
+    if (WRITE_LOG_ENTRY(gLogIndex,entry) != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
 
+    //set the valid bit and write it
     entry.bits.valid = 0;
 
-    flash_write(entryAbsAddr,sizeof(LogEntry),(uint8_t*)&entry);
+    if (WRITE_LOG_ENTRY(gLogIndex,entry) != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
+
+    return SUCCESS;
 }
 
-/*void ObsoleteLogEntry(LogEntry* pEntry,uint16_t size)
+/*
+ * writes a file to a given EraseUnit
+ */
+static FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint8_t euIndex)
 {
-   pEntry->addFile.obsolete = 0;
-   flash_write(BLOCK_SIZE*gLog.logEUListIndex + gLog.logEntryOffset - size,size,(uint8_t*)pEntry);
-}*/
+    SectorDescriptor desc;
+    EraseUnitHeader header;
 
-FS_STATUS writeFile(const char* filename, unsigned length, const char* data,uint8_t euIndex)
-{
-   uint16_t sectorDescAddr = BLOCK_SIZE*euIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*gEUList[euIndex].totalDescriptors;
+    //calculate the absolute address of the next free secotr descriptor
+    uint16_t sectorDescAddr = BLOCK_SIZE*euIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*gEUList[euIndex].totalDescriptors;
 
-   uint16_t dataAddr = BLOCK_SIZE*euIndex + gEUList[euIndex].nextFreeOffset - length;
+    //calculate the absolute address of the file's content to be written
+    uint16_t dataAddr = BLOCK_SIZE*euIndex + gEUList[euIndex].nextFreeOffset - length;
 
-   SectorDescriptor desc;
+    memset(&desc,0xFF,sizeof(SectorDescriptor));
 
-   EraseUnitHeader header;
+    //mark prev sector/EUHeader as non last/empty
+    if (gEUList[euIndex].totalDescriptors != 0)
+    {
+	    memset(&desc,0xFF,sizeof(SectorDescriptor));
+	    desc.metadata.bits.lastDesc = 0;
+	    if (flash_write(sectorDescAddr - sizeof(SectorDescriptor),sizeof(SectorDescriptor),(uint8_t*)&desc) != OPERATION_SUCCESS)
+        {
+            return FAILURE_ACCESSING_FLASH;
+        }
+        desc.metadata.bits.lastDesc = 1;
+    }
+    else
+    {
+	    memset(&header,0xFF,sizeof(EraseUnitHeader));
+	    header.metadata.bits.emptyEU = 0;
 
-   memset(&desc,0xFF,sizeof(SectorDescriptor));
+	    if (flash_write(BLOCK_SIZE*euIndex,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+        {
+            return FAILURE_ACCESSING_FLASH;
+        }
+    }
+    
+    //fill SectorDescriptor info
+    strncpy(desc.fileName,filename,FILE_NAME_MAX_LEN);
+    desc.offset = gEUList[euIndex].nextFreeOffset - length;
+    desc.size = length;
 
-   //mark prev sector as non last
-   if (gEUList[euIndex].totalDescriptors != 0)
-   {
+    //write entire descriptor
+    if (flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc) != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
 
-	   memset(&desc,0xFF,sizeof(SectorDescriptor));
-	   desc.metadata.bits.lastDesc = 0;
-	   flash_write(sectorDescAddr - sizeof(SectorDescriptor),sizeof(SectorDescriptor),(uint8_t*)&desc);
-       desc.metadata.bits.lastDesc = 1;
-   }
-   else
-   {
-	   memset(&header,0xFF,sizeof(EraseUnitHeader));
-	   header.metadata.bits.emptyEU = 0;
-	   flash_write(BLOCK_SIZE*euIndex,sizeof(EraseUnitHeader),(uint8_t*)&header);
-   }
-
-   strncpy(desc.fileName,filename,FILE_NAME_MAX_LEN);
-   desc.offset = gEUList[euIndex].nextFreeOffset - length;
-   desc.size = length;
-
-   //write entire descriptor
-   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
-   //mark descriptor metadata as valid
-   desc.metadata.bits.validOffset = 0;
-   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
+    //mark descriptor metadata as valid
+    desc.metadata.bits.validOffset = 0;
+    flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
 
 
-   //write file content
-   flash_write(dataAddr,length,(uint8_t*)data);
-   //mark entire file as valid
-   desc.metadata.bits.validDesc = 0;
-   flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc);
-      
-   gEUList[euIndex].bytesFree -= (sizeof(SectorDescriptor) + length);
-   gEUList[euIndex].nextFreeOffset-=length;
-   gEUList[euIndex].totalDescriptors++;
-   gEUList[euIndex].validDescriptors++;
+    //write file content
+    if (flash_write(dataAddr,length,(uint8_t*)data) != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
+    //mark entire file as valid
+    desc.metadata.bits.validDesc = 0;
 
-   return SUCCESS;
+    if (flash_write(sectorDescAddr,sizeof(SectorDescriptor),(uint8_t*)&desc) != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
+    
+    //update FS DAST
+    gEUList[euIndex].bytesFree -= (sizeof(SectorDescriptor) + length);
+    gEUList[euIndex].nextFreeOffset-=length;
+    gEUList[euIndex].totalDescriptors++;
+    gEUList[euIndex].validDescriptors++;
+
+    return SUCCESS;
 }
 
-bool findFreeSector(uint16_t fileSize,uint8_t* euIndex)
+/*
+ * search if exist EraseUnit with enough free space to host new file descriptor and file content as well
+ *
+ */
+static bool findFreeEraseUnit(uint16_t fileSize,uint8_t* euIndex)
 {
    uint8_t i;
+
+   //check if none EraseUnit has enough sapce
    for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
    {
 	  if (gLogIndex != i && gEUList[i].bytesFree >= (fileSize + sizeof(SectorDescriptor)))
@@ -559,13 +627,197 @@ bool findFreeSector(uint16_t fileSize,uint8_t* euIndex)
    return false;
 }
 
+
+/*
+ * given some size, find if exist EraseUnit that after compaction wil have enough free
+ * space to store size bytes (size = file's content + sizeof(SectorDescriptor))
+ */
+static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned size)
+{
+    uint32_t minEN = 0xFFFFFFFF;
+    uint16_t maxFreeBytes = 0;
+    uint8_t i;
+    bool found = false;
+
+    for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
+    {
+        if (i == gLogIndex)
+        {
+            continue;
+        }
+
+        //if few EU share the minimal EraseNumber and , choose the one which will yield 
+        //the largest freeBytes aftet compaction
+
+                //this block will have enough space to host the new file after compaction
+        if (    (gEUList[i].deleteFilesTotalSize+gEUList[i].bytesFree >= size) &&   
+                //his EN is minimal and his free space is the largest so far
+                (gEUList[i].eraseNumber <= minEN && maxFreeBytes < gEUList[i].deleteFilesTotalSize) 
+           )
+        {
+            minEN = gEUList[i].eraseNumber;
+            maxFreeBytes = gEUList[i].deleteFilesTotalSize;
+            *euIndex = i;
+            found = true;
+        }
+    }
+
+    return found;
+}
+
+/*
+ * copy some buffer inside the flash to another palce inside the flash
+ *
+ */
+ static FS_STATUS CopyDataInsideFlash(uint16_t srcAddr,uint16_t srcSize,uint16_t destAddr)
+ {
+     uint16_t bytesToRead;
+     uint8_t data[BYTES_PER_TRANSACTION];
+     FS_STATUS status = SUCCESS;
+
+     //sinec the flash can read/write in BYTES_PER_TRANSACTION chuncks, do it this size
+     while (srcSize > 0)
+     {
+         bytesToRead = (srcSize > BYTES_PER_TRANSACTION)?BYTES_PER_TRANSACTION:srcSize;
+
+         if (flash_read(srcAddr,bytesToRead,data) != SUCCESS)
+         {
+             status = FAILURE_ACCESSING_FLASH;
+             break;
+         }
+
+         if (flash_write(destAddr,bytesToRead,data) != SUCCESS)
+         {
+             status = FAILURE_ACCESSING_FLASH;
+             break;
+         }
+
+         srcAddr+=bytesToRead;
+         destAddr+=bytesToRead;
+         srcSize-=bytesToRead;
+     }
+
+     return status;
+ }
+
+/*
+ * compact given EraseUnit. if previous compaction failed, supply the LogEntry as
+ * argument and the function will continue the process from the failure point
+ */
+static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
+{
+
+    EraseUnitHeader header;
+    uint16_t actualFileDescIdx = 0,secDescAddr,dataOffset;
+    uint8_t i;
+    
+    SectorDescriptor sec;
+
+    //if the LogEntry we got is uninitilize one, init it with data
+    if (entry.bits.valid == 1)
+    {
+        entry.bits.euIndex = euIndex;
+        entry.bits.eraseNumber = gEUList[euIndex].eraseNumber+1;
+        flash_write((gLogIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry);
+    }
+
+    //mark the entry as valid if needed
+    if (entry.bits.valid == 1)
+    {
+        entry.bits.valid = 0;
+
+        //make the entry valid
+        flash_write((gLogIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry);    
+    }
+    
+    //if we didn't copy files yet
+    if (entry.bits.copyComplete == 1)
+    {
+        //if we going to copy some valid files, mark the header as non empty
+        if (gEUList[euIndex].validDescriptors > 0)
+        {
+            memset(&header,0xFF,sizeof(EraseUnitHeader));
+            header.metadata.bits.emptyEU = 0;
+            gEUList[gLogIndex].metadata.bits.emptyEU = 0;
+            flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+        }
+
+        //set initial addres and offset
+        secDescAddr = gLogIndex*BLOCK_SIZE + sizeof(EraseUnitHeader);
+        dataOffset = BLOCK_SIZE - sizeof(LogEntry);
+
+        //start to copy files
+        for(i = 0 ; i < gEUList[euIndex].validDescriptors ; ++i)
+        {
+            getNextValidSectorDescriptor(euIndex,&actualFileDescIdx,&sec);
+            
+            dataOffset -= sec.size;
+
+            //copy the file's conent to the new block
+            CopyDataInsideFlash(BLOCK_SIZE*euIndex + sec.offset,sec.size,BLOCK_SIZE*gLogIndex + dataOffset);
+
+            sec.offset = dataOffset;
+
+            //set the file's descriptor (SecotrDescriptor)
+            flash_write(secDescAddr,sizeof(SectorDescriptor),(uint8_t*)&sec);
+
+            secDescAddr+=sizeof(SectorDescriptor);
+
+        }
+
+        //set copy complete
+        entry.bits.copyComplete = 0;
+        flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+    }
+    
+    //erase the block if need to
+    if (entry.bits.eraseComplete == 1)
+    {
+        flash_block_erase_start(BLOCK_SIZE*euIndex);
+        //set erase complete
+        entry.bits.eraseComplete = 0;
+        flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+    }
+
+    
+    //set log header to this erased block
+    memset(&header,0xFF,sizeof(EraseUnitHeader));
+
+    header.canary = CANARY_VALUE;
+    header.eraseNumber = entry.bits.eraseNumber;
+    header.metadata.bits.type = LOG;
+    header.metadata.bits.valid = 0;
+
+    flash_write(euIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+
+    
+    //change old log's type to data type
+    memset(&header,0xFF,sizeof(EraseUnitHeader));
+    header.metadata.bits.type = DATA;
+    flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+
+
+    //set some general data
+    gEUList[gLogIndex].bytesFree = gEUList[euIndex].bytesFree + gEUList[euIndex].deleteFilesTotalSize;
+    gEUList[gLogIndex].deleteFilesTotalSize = 0;
+    gEUList[gLogIndex].nextFreeOffset = dataOffset;
+    gEUList[gLogIndex].totalDescriptors = gEUList[gLogIndex].validDescriptors = gEUList[euIndex].validDescriptors;
+
+    gEUList[euIndex].metadata.bits.type = LOG;
+
+    //set new log index
+    gLogIndex = euIndex;
+
+}
+
 //first fit algo
 FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 {
    uint8_t i,euIndex;
    uint16_t address;
-   
-   
+   bool compactionSucceed;
+   LogEntry entry;
+
    if (filename == NULL || data == NULL)
    {
       return COMMAND_PARAMETERS_ERROR;
@@ -581,16 +833,19 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
       return MAXIMUM_FILES_CAPACITY_EXCEEDED;
    }
 
-   if (findFreeSector(length,&euIndex))
+   if (findFreeEraseUnit(length,&euIndex))
    {
         eraseFileFromFS(filename);
-        return writeFile(filename,length,data,euIndex);
+        
    }
-   else //if (relocateBlock(&euIndex)) - find if compaction will lead to succesful insertion
+   else if (findEraseUnitToCompact(&euIndex,length+sizeof(SectorDescriptor) == SUCCESS)
    {
-        eraseFileFromFS(filename);
-        //...
-        return SUCCESS;
+       entry.data = 0xFFFFFFFF;
+       if (CompactBlock(euIndex,entry) == SUCCESS)
+       {
+           eraseFileFromFS(filename);
+           return writeFile(filename,length,data,euIndex);
+       }
    }
    
    return MAXIMUM_FLASH_SIZE_EXCEEDED;
@@ -740,7 +995,7 @@ FS_STATUS eraseFileFromFS(const char* filename)
 
    --gEUList[secEuIndex].validDescriptors;
    gEUList[secEuIndex].deleteFilesTotalSize+=(sec.size + sizeof(SectorDescriptor));
-
+   --gFilesCount;
 
    return SUCCESS;
 
