@@ -135,7 +135,10 @@ static bool findFreeEraseUnit(uint16_t fileSize,uint8_t* euIndex);
 static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned length);
 static FS_STATUS CopyDataInsideFlash(uint16_t srcAddr,uint16_t srcSize,uint16_t destAddr);
 static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry);
-
+static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSectorIndex,SectorDescriptor* pSecDesc);
+static bool isFilenameMatchs(SectorDescriptor *pSecDesc,const char* filename);
+static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,uint8_t *pEuIndex,uint16_t* pSecActualIndex);
+static FS_STATUS eraseFileFromFS(const char* filename);
 /**** Forward Declaration End*****/
 
 //hold the data we need about every EraseUnit. will save flash IO operations
@@ -197,7 +200,11 @@ static FS_STATUS intstallFileSystem()
         }
 		
 		header.metadata.bits.valid = 0;
-		flash_write(euAddress + MY_OFFSET(EraseUnitHeader,metadata.data),1,(uint8_t*)&header.metadata.data);
+		
+		if (flash_write(euAddress + MY_OFFSET(EraseUnitHeader,metadata.data),1,(uint8_t*)&header.metadata.data) != OPERATION_SUCCESS)
+		{
+			return FAILURE_ACCESSING_FLASH;
+		}
 
 		//init the DAST which saves data about every EraseUnit (block)
 		gEUList[i].eraseNumber = 0;
@@ -212,6 +219,8 @@ static FS_STATUS intstallFileSystem()
 	gLogIndex = 0;
 
     gFilesCount = 0;
+
+	return SUCCESS;
 }
 
 /*
@@ -309,7 +318,7 @@ static void CorrectLogEntry(LogEntry* pEntry)
             entry.bits.euIndex = i;
 
             //check if pEntry zeros bits are subset of entry
-            if (entry.data & pEntry->data == entry.data && minEN < gEUList[i].eraseNumber)
+            if ((entry.data & pEntry->data) == entry.data && minEN < gEUList[i].eraseNumber)
             {
                 minEN = gEUList[i].eraseNumber;
                 *pEntry = entry;
@@ -609,7 +618,7 @@ static FS_STATUS writeFile(const char* filename, unsigned length, const char* da
 
 /*
  * search if exist EraseUnit with enough free space to host new file descriptor and file content as well
- *
+ * work according the first fit algorithm
  */
 static bool findFreeEraseUnit(uint16_t fileSize,uint8_t* euIndex)
 {
@@ -710,7 +719,8 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
     EraseUnitHeader header;
     uint16_t actualFileDescIdx = 0,secDescAddr,dataOffset;
     uint8_t i;
-    
+	FS_STATUS status;
+
     SectorDescriptor sec;
 
     //if the LogEntry we got is uninitilize one, init it with data
@@ -718,7 +728,11 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
     {
         entry.bits.euIndex = euIndex;
         entry.bits.eraseNumber = gEUList[euIndex].eraseNumber+1;
-        flash_write((gLogIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry);
+        if (WRITE_LOG_ENTRY(gLogIndex,entry) != OPERATION_SUCCESS)
+		{
+			return FAILURE_ACCESSING_FLASH;
+		}
+		//flash_write((gLogIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry);
     }
 
     //mark the entry as valid if needed
@@ -727,7 +741,10 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
         entry.bits.valid = 0;
 
         //make the entry valid
-        flash_write((gLogIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry);    
+        if (WRITE_LOG_ENTRY(gLogIndex,entry) != OPERATION_SUCCESS)
+		{
+			return FAILURE_ACCESSING_FLASH;
+		}
     }
     
     //if we didn't copy files yet
@@ -739,7 +756,11 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
             memset(&header,0xFF,sizeof(EraseUnitHeader));
             header.metadata.bits.emptyEU = 0;
             gEUList[gLogIndex].metadata.bits.emptyEU = 0;
-            flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+            
+			if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+			{
+				return FAILURE_ACCESSING_FLASH;
+			}
         }
 
         //set initial addres and offset
@@ -754,12 +775,18 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
             dataOffset -= sec.size;
 
             //copy the file's conent to the new block
-            CopyDataInsideFlash(BLOCK_SIZE*euIndex + sec.offset,sec.size,BLOCK_SIZE*gLogIndex + dataOffset);
+            if ((status = CopyDataInsideFlash(BLOCK_SIZE*euIndex + sec.offset,sec.size,BLOCK_SIZE*gLogIndex + dataOffset)) != SUCCESS)
+			{
+				return status;;
+			}
 
             sec.offset = dataOffset;
 
             //set the file's descriptor (SecotrDescriptor)
-            flash_write(secDescAddr,sizeof(SectorDescriptor),(uint8_t*)&sec);
+            if (flash_write(secDescAddr,sizeof(SectorDescriptor),(uint8_t*)&sec) != OPERATION_SUCCESS)
+			{
+				return FAILURE_ACCESSING_FLASH;
+			}
 
             secDescAddr+=sizeof(SectorDescriptor);
 
@@ -767,16 +794,26 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 
         //set copy complete
         entry.bits.copyComplete = 0;
-        flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+        if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != SUCCESS)
+		{
+			return FAILURE_ACCESSING_FLASH;
+		}
     }
     
     //erase the block if need to
     if (entry.bits.eraseComplete == 1)
     {
-        flash_block_erase_start(BLOCK_SIZE*euIndex);
+        if (flash_block_erase_start(BLOCK_SIZE*euIndex) != OPERATION_SUCCESS)
+		{
+			return FAILURE_ACCESSING_FLASH;
+		}
         //set erase complete
         entry.bits.eraseComplete = 0;
-        flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+        
+		if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+		{
+			return FAILURE_ACCESSING_FLASH;
+		}
     }
 
     
@@ -788,13 +825,20 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
     header.metadata.bits.type = LOG;
     header.metadata.bits.valid = 0;
 
-    flash_write(euIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+    if (flash_write(euIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+	{
+		return FAILURE_ACCESSING_FLASH;
+	}
 
     
     //change old log's type to data type
     memset(&header,0xFF,sizeof(EraseUnitHeader));
     header.metadata.bits.type = DATA;
-    flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header);
+    
+	if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+	{
+		return FAILURE_ACCESSING_FLASH;
+	}
 
 
     //set some general data
@@ -808,16 +852,16 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
     //set new log index
     gLogIndex = euIndex;
 
+	return SUCCESS;
+
 }
 
-//first fit algo
 FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 {
-   uint8_t i,euIndex;
-   uint16_t address;
-   bool compactionSucceed;
    LogEntry entry;
-
+   FS_STATUS status;
+   uint8_t euIndex;
+   
    if (filename == NULL || data == NULL)
    {
       return COMMAND_PARAMETERS_ERROR;
@@ -833,30 +877,53 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
       return MAXIMUM_FILES_CAPACITY_EXCEEDED;
    }
 
+   //try to find free space
    if (findFreeEraseUnit(length,&euIndex))
    {
-        eraseFileFromFS(filename);
+		status = eraseFileFromFS(filename);
+		if (status != SUCCESS && status != FILE_NOT_FOUND)
+		{
+			return status;
+		}
+		return writeFile(filename,length,data,euIndex);
         
    }
-   else if (findEraseUnitToCompact(&euIndex,length+sizeof(SectorDescriptor) == SUCCESS)
+   //try to find EraseUnit that after compaction will have enough space 
+   else if (findEraseUnitToCompact(&euIndex,length+sizeof(SectorDescriptor)) == SUCCESS)
    {
        entry.data = 0xFFFFFFFF;
+
        if (CompactBlock(euIndex,entry) == SUCCESS)
        {
-           eraseFileFromFS(filename);
-           return writeFile(filename,length,data,euIndex);
+			//erase previouse file with same name if such exist
+		    status = eraseFileFromFS(filename);
+			
+			if (status != SUCCESS && status != FILE_NOT_FOUND)
+			{
+				return FAILURE_ACCESSING_FLASH;
+			}
+
+			//write the actual file
+			return writeFile(filename,length,data,euIndex);
        }
    }
    
    return MAXIMUM_FLASH_SIZE_EXCEEDED;
 }
 
-//assumption, file exist i.e euIndex is valid and not log and validSectorIndex <= number of valid files per this EU.
-FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSectorIndex,SectorDescriptor* pSecDesc)
+/*
+ * get the next valid sector descriptor inside a given EraseUnit
+ * pPrevActualSectorIndex - when calling the function this holds the last actual SectorDescriptor index we processed or 0 if we want the
+ *							first SectorDescriptor. when returning this holds the actual SectorDescriptor index of the next vaild sector 
+ *							descriptor
+ * assumptions: the given erase unit has more SectorDescriptors (i.e. pPrevActualSectorIndex < the last actual sector descriptor index)
+ */
+static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSectorIndex,SectorDescriptor* pSecDesc)
 {
 
    uint16_t baseAddress = BLOCK_SIZE*euIndex,secDescOffset = sizeof(EraseUnitHeader) ,sectorIndexInc = 0;
    
+   //advance the index if we got relevant value value
    if (pPrevActualSectorIndex != NULL && *pPrevActualSectorIndex > 0)
    {
       secDescOffset += sizeof(SectorDescriptor)*(*pPrevActualSectorIndex + 1);
@@ -873,6 +940,8 @@ FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSect
    //cancle last increment, since we want the actual index of the current file and not the next
    --sectorIndexInc;
 
+
+   //updtae the actual index if such been provided
    if (pPrevActualSectorIndex != NULL)
    {
       *pPrevActualSectorIndex+=sectorIndexInc;
@@ -881,14 +950,22 @@ FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSect
    return SUCCESS;
 }
 
-bool isFilenameMatchs(SectorDescriptor *pSecDesc,const char* filename)
+/*
+ * check if a given file name matchs a given SectorDescriptor's file name 
+ *
+ */
+static bool isFilenameMatchs(SectorDescriptor *pSecDesc,const char* filename)
 {
    char fsFileName[FILE_NAME_MAX_LEN+1] = {'\0'};
    memcpy(fsFileName,pSecDesc->fileName,FILE_NAME_MAX_LEN);
    return strcmp(fsFileName,filename)==0;
 }
 
-FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,uint8_t *pEuIndex,uint16_t* pSecActualIndex)
+/*
+ * search for a sector descriptor that matchs a given file name.
+ * return the SectorDescriptor itself, it's actual index and his EraseUnit's index
+ */
+static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,uint8_t *pEuIndex,uint16_t* pSecActualIndex)
 {
    uint16_t secIdx,lastActualSecIdx;
    bool found = false;
@@ -896,7 +973,7 @@ FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,ui
 
    for(euIdx = 0 ; euIdx < ERASE_UNITS_NUMBER ; ++euIdx)
    {
-      //skip the log EU
+      //skip the log EU since we can't save files there
       if (gLogIndex == euIdx)
       {
          continue;
@@ -904,9 +981,14 @@ FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,ui
 
       lastActualSecIdx = 0;
 
+	  //parse vaild secor descriptor and check if the given filename matchs
       for(secIdx = 0 ; secIdx < gEUList[euIdx].validDescriptors ; ++secIdx)
       {
-         getNextValidSectorDescriptor(euIdx,&lastActualSecIdx,pSecDesc);
+         if (getNextValidSectorDescriptor(euIdx,&lastActualSecIdx,pSecDesc) != SUCCESS)
+		 {
+			 break;
+		 }
+
          if (isFilenameMatchs(pSecDesc,filename))
          {
             found = true;
@@ -914,12 +996,14 @@ FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,ui
          }
       }
 
+	  //if we found, no need to parse the rest of the EUs.
       if (found)
       {
          break;
       }
    }
-
+   
+   //update relevant info if we found mathc
    if (found)
    {
       if (pEuIndex != NULL)
@@ -941,6 +1025,11 @@ FS_STATUS fs_filesize(const char* filename, unsigned* length)
    FS_STATUS status;
    uint8_t secEuIdx;
    
+   if (filename == NULL || length == NULL)
+   {
+	   return COMMAND_PARAMETERS_ERROR;
+   }
+   //search for this filename
    status = getSectorDescriptor(filename,&sec,&secEuIdx,NULL);
 
    if (status != SUCCESS)
@@ -960,6 +1049,12 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data)
    FS_STATUS status;
    uint8_t secEuIndex;
    
+   if (filename == NULL || length == NULL || data == NULL)
+   {
+	   return COMMAND_PARAMETERS_ERROR;
+   }
+
+   //get the file
    status = getSectorDescriptor(filename,&sec,&secEuIndex,NULL);
 
    if (status != SUCCESS)
@@ -967,15 +1062,29 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data)
       return status;
    }
 
+   //given buffer is to small
+   if (sec.size > *length)
+   {
+	   return FAILURE;
+   }
+
    
    *length = sec.size;
-   flash_read(BLOCK_SIZE*secEuIndex + sec.offset,sec.size,(uint8_t*)data); //TODO retvalue
+   
+   //read the file's content
+   if (flash_read(BLOCK_SIZE*secEuIndex + sec.offset,sec.size,(uint8_t*)data) != OPERATION_SUCCESS)
+   {
+	   return FAILURE_ACCESSING_FLASH;
+   }
    
    return SUCCESS;
    
 }
 
-FS_STATUS eraseFileFromFS(const char* filename)
+/*
+ * erase given filename from FS
+ */
+static FS_STATUS eraseFileFromFS(const char* filename)
 {
    SectorDescriptor sec;
    FS_STATUS status;
@@ -989,10 +1098,15 @@ FS_STATUS eraseFileFromFS(const char* filename)
       return status;
    }
 
+   //mark the file as obsolete and write it to the flash
    sec.metadata.bits.obsoleteDes = 0;
 
-   flash_write(BLOCK_SIZE*secEuIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*actualSecIndex,sizeof(SectorDescriptor),(uint8_t*)&sec); //TODO retvalue
+   if (flash_write(BLOCK_SIZE*secEuIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*actualSecIndex,sizeof(SectorDescriptor),(uint8_t*)&sec) != OPERATION_SUCCESS)
+   {
+	   return FAILURE_ACCESSING_FLASH;
+   }
 
+   //update internal DAST
    --gEUList[secEuIndex].validDescriptors;
    gEUList[secEuIndex].deleteFilesTotalSize+=(sec.size + sizeof(SectorDescriptor));
    --gFilesCount;
@@ -1014,6 +1128,8 @@ FS_STATUS fs_count(unsigned* file_count)
 {
    //take the lock
    *file_count = gFilesCount;
+
+   return SUCCESS;
 }
 
 FS_STATUS fs_list(unsigned* length, char* files)
@@ -1025,7 +1141,7 @@ FS_STATUS fs_list(unsigned* length, char* files)
    uint8_t filenameLen;
    char fsFilename[FILE_NAME_MAX_LEN+1] = {'\0'};
 
-   if (files == NULL)
+   if (files == NULL || length == NULL)
    {
 	   return COMMAND_PARAMETERS_ERROR;
    }
@@ -1040,18 +1156,20 @@ FS_STATUS fs_list(unsigned* length, char* files)
 
       lastActualSecIdx = 0;
 
+	  //read current EraseUnit valid sectors
       for(secIdx = 0 ; secIdx < gEUList[euIdx].validDescriptors ; ++secIdx)
       {
          getNextValidSectorDescriptor(euIdx,&lastActualSecIdx,&secDesc);
          strncpy(fsFilename,secDesc.fileName,FILE_NAME_MAX_LEN);
          filenameLen = strlen(fsFilename);
 
+		 //check if the given buffer long enough to store current file name + '\0'
          if ((ansIndex + filenameLen + 1) > *length)
          {
              return FAILURE;
          }
          strcpy(&files[ansIndex],fsFilename);
-         ansIndex+=(filenameLen+1);//+1 for the terminator \0
+         ansIndex+=(filenameLen+1);//+1 for the terminator '\0'
       }
    }
 
