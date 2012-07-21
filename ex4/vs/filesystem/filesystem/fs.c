@@ -611,7 +611,7 @@ static FS_STATUS writeFile(const char* filename, unsigned length, const char* da
     gEUList[euIndex].nextFreeOffset-=length;
     gEUList[euIndex].totalDescriptors++;
     gEUList[euIndex].validDescriptors++;
-
+    ++gFilesCount;
     return SUCCESS;
 }
 
@@ -746,21 +746,25 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 		}
     }
     
+    
+    
     //if we didn't copy files yet
     if (entry.bits.copyComplete == 1)
     {
+        memset(&header,0xFF,sizeof(EraseUnitHeader));
+
         //if we going to copy some valid files, mark the header as non empty
         if (gEUList[euIndex].validDescriptors > 0)
         {
-            memset(&header,0xFF,sizeof(EraseUnitHeader));
+            
             header.metadata.bits.emptyEU = 0;
             gEUList[gLogIndex].metadata.bits.emptyEU = 0;
-            
-			if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
-			{
-				return FAILURE_ACCESSING_FLASH;
-			}
         }
+
+    	if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+    	{
+			return FAILURE_ACCESSING_FLASH;
+		}
 
         //set initial addres and offset
         secDescAddr = gLogIndex*BLOCK_SIZE + sizeof(EraseUnitHeader);
@@ -859,7 +863,7 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 {
    LogEntry entry;
    FS_STATUS status;
-   uint8_t euIndex;
+   uint8_t euIndex,oldLogIndex;
    
    if (filename == NULL || data == NULL)
    {
@@ -888,10 +892,10 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
         
    }
    //try to find EraseUnit that after compaction will have enough space 
-   else if (findEraseUnitToCompact(&euIndex,length+sizeof(SectorDescriptor)) == SUCCESS)
+   else if (findEraseUnitToCompact(&euIndex,length+sizeof(SectorDescriptor)))
    {
        entry.data = 0xFFFFFFFF;
-
+       oldLogIndex = gLogIndex;
        if (CompactBlock(euIndex,entry) == SUCCESS)
        {
 			//erase previouse file with same name if such exist
@@ -903,7 +907,7 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
 			}
 
 			//write the actual file
-			return writeFile(filename,length,data,euIndex);
+			return writeFile(filename,length,data,oldLogIndex);
        }
    }
    
@@ -1223,7 +1227,7 @@ FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
 
 void test()
 {
-   //FS_STATUS status;
+   FS_STATUS status;
    char data1[MAX_FILE_SIZE] = {'a'};
    char data2[MAX_FILE_SIZE] = {'b'};
    char data3[MAX_FILE_SIZE] = {'c'};
@@ -1242,18 +1246,18 @@ void test()
    memset(data4,'d',MAX_FILE_SIZE);
    memset(data5,'e',MAX_FILE_SIZE);
    memset(data6,'f',MAX_FILE_SIZE);
-   //uint32_t i;
+
 
    loadFilesystem();
 
-   /*for(i = 0 ; i < 1000 ; ++i)
+   for(i = 0 ; i < 200 ; ++i)
    {
-       status = fs_write("file_a",0,data1);
+       status = fs_write("file_a",MAX_FILE_SIZE,data1);
        if (status != SUCCESS)
        {
            i = i;
        }
-   }*/
+   }
 
    fs_write("file_a",0,data1);
    fs_write("file_b",1,data2);
