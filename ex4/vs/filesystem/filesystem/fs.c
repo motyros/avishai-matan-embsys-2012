@@ -122,7 +122,6 @@ typedef struct
 
 //TODO make every argument that should not change to const
 
-static FS_STATUS CompleteCompaction(uint8_t firstLogIndex,bool secondLogExists,uint8_t secondLogIndex);
 static FS_STATUS intstallFileSystem();
 static FS_STATUS ParseEraseUnitContent(uint16_t i);
 static bool isUninitializeSegment(uint8_t* pSeg,uint32_t size);
@@ -135,7 +134,7 @@ static bool findFreeEraseUnit(uint16_t fileSize,uint8_t* euIndex);
 static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned length);
 static FS_STATUS CopyDataInsideFlash(uint16_t srcAddr,uint16_t srcSize,uint16_t destAddr);
 static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry);
-static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSectorIndex,SectorDescriptor* pSecDesc);
+static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pNextActualSectorIndex,SectorDescriptor* pSecDesc);
 static bool isFilenameMatchs(SectorDescriptor *pSecDesc,const char* filename);
 static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,uint8_t *pEuIndex,uint16_t* pSecActualIndex);
 static FS_STATUS eraseFileFromFS(const char* filename);
@@ -412,7 +411,7 @@ static FS_STATUS CompleteCompaction(uint8_t firstLogIndex,bool secondLogExists,u
  */
 static FS_STATUS loadFilesystem()
 {
-	uint8_t corruptedCanariesCount = 0,i,firstLogIndex,secondLogIndex,corruptedEUIndex;
+	uint8_t corruptedCanariesCount = 0,i,firstLogIndex,secondLogIndex = 0,corruptedEUIndex = 0;
 	uint8_t logCount = 0;
 	uint16_t euAddress = 0;
 	
@@ -490,7 +489,7 @@ static FS_STATUS loadFilesystem()
    //if no log found, or corrupted fs, create one
    if (logCount == 0 || logCount > 2 || corruptedCanariesCount > 1)
    {
-      intstallFileSystem();
+      return intstallFileSystem();
    }
 
    if (logCount == 1)
@@ -659,7 +658,7 @@ static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned size)
         //the largest freeBytes aftet compaction
 
                 //this block will have enough space to host the new file after compaction
-        if (    (gEUList[i].deleteFilesTotalSize+gEUList[i].bytesFree >= size) &&   
+        if (    ((uint16_t)(gEUList[i].deleteFilesTotalSize+gEUList[i].bytesFree) >= size) &&   
                 //his EN is minimal and his free space is the largest so far
                 (gEUList[i].eraseNumber <= minEN && maxFreeBytes < gEUList[i].deleteFilesTotalSize) 
            )
@@ -717,7 +716,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 {
 
     EraseUnitHeader header;
-    uint16_t actualFileDescIdx = 0,secDescAddr,dataOffset;
+    uint16_t actualNextFileDescIdx = 0,secDescAddr,dataOffset;
     uint8_t i;
 	FS_STATUS status;
 
@@ -770,7 +769,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
         //start to copy files
         for(i = 0 ; i < gEUList[euIndex].validDescriptors ; ++i)
         {
-            getNextValidSectorDescriptor(euIndex,&actualFileDescIdx,&sec);
+            getNextValidSectorDescriptor(euIndex,&actualNextFileDescIdx,&sec);
             
             dataOffset -= sec.size;
 
@@ -918,16 +917,16 @@ FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
  *							descriptor
  * assumptions: the given erase unit has more SectorDescriptors (i.e. pPrevActualSectorIndex < the last actual sector descriptor index)
  */
-static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevActualSectorIndex,SectorDescriptor* pSecDesc)
+static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pNextActualSectorIndex,SectorDescriptor* pSecDesc)
 {
 
    uint16_t baseAddress = BLOCK_SIZE*euIndex,secDescOffset = sizeof(EraseUnitHeader) ,sectorIndexInc = 0;
    
    //advance the index if we got relevant value value
-   if (pPrevActualSectorIndex != NULL && *pPrevActualSectorIndex > 0)
+   if (pNextActualSectorIndex != NULL && *pNextActualSectorIndex > 0)
    {
-      secDescOffset += sizeof(SectorDescriptor)*(*pPrevActualSectorIndex + 1);
-       ++sectorIndexInc;
+      secDescOffset += sizeof(SectorDescriptor)*(*pNextActualSectorIndex);
+       //++sectorIndexInc;
    }
 
    do
@@ -942,9 +941,9 @@ static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pPrevAct
 
 
    //updtae the actual index if such been provided
-   if (pPrevActualSectorIndex != NULL)
+   if (pNextActualSectorIndex != NULL)
    {
-      *pPrevActualSectorIndex+=sectorIndexInc;
+      *pNextActualSectorIndex+=(sectorIndexInc + 1);
    }
 
    return SUCCESS;
@@ -967,7 +966,7 @@ static bool isFilenameMatchs(SectorDescriptor *pSecDesc,const char* filename)
  */
 static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,uint8_t *pEuIndex,uint16_t* pSecActualIndex)
 {
-   uint16_t secIdx,lastActualSecIdx;
+   uint16_t secIdx,nextActualSecIdx;
    bool found = false;
    uint8_t euIdx;
 
@@ -979,12 +978,12 @@ static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSec
          continue;
       }
 
-      lastActualSecIdx = 0;
+      nextActualSecIdx = 0;
 
 	  //parse vaild secor descriptor and check if the given filename matchs
       for(secIdx = 0 ; secIdx < gEUList[euIdx].validDescriptors ; ++secIdx)
       {
-         if (getNextValidSectorDescriptor(euIdx,&lastActualSecIdx,pSecDesc) != SUCCESS)
+         if (getNextValidSectorDescriptor(euIdx,&nextActualSecIdx,pSecDesc) != SUCCESS)
 		 {
 			 break;
 		 }
@@ -1012,7 +1011,7 @@ static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSec
       }
       if (pSecActualIndex != NULL)
       {
-         *pSecActualIndex = lastActualSecIdx;
+         *pSecActualIndex = nextActualSecIdx-1;
       }
    }
 
@@ -1164,7 +1163,7 @@ FS_STATUS fs_list(unsigned* length, char* files)
          filenameLen = strlen(fsFilename);
 
 		 //check if the given buffer long enough to store current file name + '\0'
-         if ((ansIndex + filenameLen + 1) > *length)
+         if ((uint16_t)(ansIndex + filenameLen + 1) > *length)
          {
              return FAILURE;
          }
@@ -1179,10 +1178,52 @@ FS_STATUS fs_list(unsigned* length, char* files)
    return SUCCESS;
 }
 
+FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
+{
+    SectorDescriptor desc;
+    uint16_t actualSecDesc;
+    uint8_t euIdx = 0,i;
+    FS_STATUS status;
+    if (index >= gFilesCount)
+    {
+        return FILE_NOT_FOUND;
+    }
+
+    while (index >= gEUList[euIdx].validDescriptors)
+    {
+        index-=gEUList[euIdx].validDescriptors;
+        ++euIdx;
+    }
+
+    actualSecDesc = 0;
+
+    for(i = 0 ; i <= index ; ++i)
+    {
+        if ((status = getNextValidSectorDescriptor(euIdx,&actualSecDesc,&desc)) != SUCCESS)
+        {
+            return status;
+        }
+    }
+
+    if (desc.size > *length)
+    {
+        return FAILURE;
+    }
+
+    if (flash_read(BLOCK_SIZE*euIdx + desc.offset,desc.size,(uint8_t*)data) != OPERATION_SUCCESS)
+    {
+        return FAILURE_ACCESSING_FLASH;
+    }
+
+    *length = desc.size;
+
+    return SUCCESS;
+
+}
 
 void test()
 {
-   FS_STATUS status;
+   //FS_STATUS status;
    char data1[MAX_FILE_SIZE] = {'a'};
    char data2[MAX_FILE_SIZE] = {'b'};
    char data3[MAX_FILE_SIZE] = {'c'};
@@ -1193,8 +1234,15 @@ void test()
    char data[MAX_FILE_SIZE];
    char filenames[(FILE_NAME_MAX_LEN+1)*1000];
    unsigned filenamesSize = (FILE_NAME_MAX_LEN+1)*1000;
-   uint32_t fileSize;
-   uint32_t i;
+   uint32_t fileSize,i;
+
+   memset(data1,'a',MAX_FILE_SIZE);
+   memset(data2,'b',MAX_FILE_SIZE);
+   memset(data3,'c',MAX_FILE_SIZE);
+   memset(data4,'d',MAX_FILE_SIZE);
+   memset(data5,'e',MAX_FILE_SIZE);
+   memset(data6,'f',MAX_FILE_SIZE);
+   //uint32_t i;
 
    loadFilesystem();
 
@@ -1207,24 +1255,31 @@ void test()
        }
    }*/
 
-   fs_write("file_a",1,data1);
+   fs_write("file_a",0,data1);
    fs_write("file_b",1,data2);
-   fs_write("file_c",1,data3);
-   fs_write("file_d",1,data4);
-   fs_write("file_e",1,data5);
-   fs_write("file_f",1,data6);
-
-   /*fs_read("file_a",&fileSize,data);
+   fs_write("file_c",2,data3);
+   fs_write("file_d",3,data4);
+   fs_write("file_e",4,data5);
+   fs_write("file_f",5,data6);
+   fileSize = MAX_FILE_SIZE;
+   fs_read("file_a",&fileSize,data);
+   fileSize = MAX_FILE_SIZE;
    fs_read("file_b",&fileSize,data);
+   fileSize = MAX_FILE_SIZE;
    fs_read("file_c",&fileSize,data);
+   fileSize = MAX_FILE_SIZE;
    fs_read("file_d",&fileSize,data);
+   fileSize = MAX_FILE_SIZE;
    fs_read("file_e",&fileSize,data);
+   fileSize = MAX_FILE_SIZE;
    fs_read("file_f",&fileSize,data);
+   fileSize = MAX_FILE_SIZE;
    fs_read("file_g",&fileSize,data);
 
    fs_erase("file_a");
    fs_erase("file_t");
-   fs_read("file_a",&fileSize,data);*/
+   fileSize = MAX_FILE_SIZE;
+   fs_read("file_a",&fileSize,data);
    filenamesSize = 42;
    fs_list(&filenamesSize,filenames);
    

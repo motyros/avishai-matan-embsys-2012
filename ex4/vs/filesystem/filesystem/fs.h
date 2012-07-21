@@ -78,6 +78,21 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data);
 /*
 
   Description:
+	Read the content of a file.
+
+  Arguments:
+	index  - the index of the desired file (zero based)
+	length - when calling the function this argument should hold the size of the 'data' input buffer.
+			 when the function return this argument will hold the file size, i.e. the actual used space size of the 'data' buffer.
+	data - a pointer for a buffer to hold the file content.
+
+
+*/
+FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data);
+
+/*
+
+  Description:
 	Erase a file.
   Arguments:
 	filename - the name of the file.
@@ -100,11 +115,12 @@ FS_STATUS fs_count(unsigned* file_count);
   Description:
 	List all the files exist in the file system.
   Arguments:
-	length - the size of the "files" buffer.
+	length - when calling the function this argument should hold the size of the "files" buffer.
+                 when the function return this argument will hold the the actual used space size of the 'files' buffer, including the last null byte.
 	files - a series of continuous null terminated strings, each representing a file name in the file system
 
 */
-FS_STATUS fs_list(unsigned length, char* files);
+FS_STATUS fs_list(unsigned* length, char* files);
 
 /* 
 	==========================================================================
