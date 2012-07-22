@@ -421,7 +421,7 @@ static FS_STATUS loadFilesystem()
     flash_init(NULL,NULL);
 
     memset(gEUList,0x00,sizeof(gEUList));
-
+    gFilesCount = 0;
     //read every EraseUnit header and parse it's SectorDescriptors list
 	for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
 	{
@@ -659,12 +659,14 @@ static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned size)
 
                 //this block will have enough space to host the new file after compaction
         if (    ((uint16_t)(gEUList[i].deleteFilesTotalSize+gEUList[i].bytesFree) >= size) &&   
-                //his EN is minimal and his free space is the largest so far
-                (gEUList[i].eraseNumber <= minEN && maxFreeBytes < gEUList[i].deleteFilesTotalSize) 
+                //his EN is minimal
+                (gEUList[i].eraseNumber <= minEN || 
+                //his EN equals to the minimal and the erase will yeild the largest free space
+                (gEUList[i].eraseNumber == minEN && maxFreeBytes <= (gEUList[i].deleteFilesTotalSize+gEUList[i].bytesFree))) 
            )
         {
             minEN = gEUList[i].eraseNumber;
-            maxFreeBytes = gEUList[i].deleteFilesTotalSize;
+            maxFreeBytes = gEUList[i].deleteFilesTotalSize+gEUList[i].bytesFree;
             *euIndex = i;
             found = true;
         }
@@ -845,6 +847,8 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 
 
     //set some general data
+    gEUList[euIndex].eraseNumber++;
+
     gEUList[gLogIndex].bytesFree = gEUList[euIndex].bytesFree + gEUList[euIndex].deleteFilesTotalSize;
     gEUList[gLogIndex].deleteFilesTotalSize = 0;
     gEUList[gLogIndex].nextFreeOffset = dataOffset;
@@ -1238,7 +1242,7 @@ void test()
    char data[MAX_FILE_SIZE];
    char filenames[(FILE_NAME_MAX_LEN+1)*1000];
    unsigned filenamesSize = (FILE_NAME_MAX_LEN+1)*1000;
-   uint32_t fileSize,i;
+   uint32_t fileSize,i,fc;
 
    memset(data1,'a',MAX_FILE_SIZE);
    memset(data2,'b',MAX_FILE_SIZE);
@@ -1250,9 +1254,11 @@ void test()
 
    loadFilesystem();
 
-   for(i = 0 ; i < 200 ; ++i)
+   for(i = 0 ; i < 4000 ; ++i)
    {
        status = fs_write("file_a",MAX_FILE_SIZE,data1);
+       fs_count(&fc);
+       loadFilesystem();
        if (status != SUCCESS)
        {
            i = i;
