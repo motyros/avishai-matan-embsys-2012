@@ -248,7 +248,7 @@ static FS_STATUS ParseEraseUnitContent(uint16_t i)
             //if this file isn't valid anymore (deleted or just not valid) add it's size
             if (sd.metadata.bits.validDesc == 1 || sd.metadata.bits.obsoleteDes == 0)
             {
-                gEUList[i].deleteFilesTotalSize+=(sd.size+sizeof(SectorDescriptor));
+                gEUList[i].deleteFilesTotalSize+=sd.size;
             }
         }
 
@@ -264,6 +264,8 @@ static FS_STATUS ParseEraseUnitContent(uint16_t i)
     }while(!sd.metadata.bits.lastDesc && secDescOffset+sizeof(SectorDescriptor) <= BLOCK_SIZE);
 
     gEUList[i].bytesFree -= sizeof(SectorDescriptor)*gEUList[i].totalDescriptors;
+
+    gEUList[i].deleteFilesTotalSize+=sizeof(SectorDescriptor)*(gEUList[i].totalDescriptors-gEUList[i].validDescriptors);
 
     return SUCCESS;
 }
@@ -471,7 +473,7 @@ static FS_STATUS loadFilesystem()
             gEUList[i].bytesFree -= sizeof(LogEntry);
             gEUList[i].nextFreeOffset -= sizeof(LogEntry);
 		}
-		//regular sector
+		//regular sector, since the first operation we doing when adding file is to zero enptyEU bit, this condition is valid
         else if (gEUList[i].metadata.bits.emptyEU == 0)
 		{
 
@@ -1254,9 +1256,9 @@ void test()
 
    loadFilesystem();
 
-   for(i = 0 ; i < 4000 ; ++i)
+   for(i = 0 ; i < 40000 ; ++i)
    {
-       status = fs_write("file_a",MAX_FILE_SIZE,data1);
+       status = fs_write("file_a",0,data1);
        fs_count(&fc);
        loadFilesystem();
        if (status != SUCCESS)

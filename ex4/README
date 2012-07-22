@@ -1,0 +1,85 @@
+avishl02,matanp01 
+Avishai Lazar 066641200 
+Matan Perel 039998570 
+ 
+project: Exercise 3 
+ 
+submited files: 
+ 
+	README				- this file 
+	makefile     			- a make file
+	device.svr3			- mapping of the segments to memory
+	ivt.s				- interrupt vector table
+    common_defs.h                   - common definitions for the library
+	main.c				- main entry of our program
+	embsys_sms_protocol_mine.c	- implementation of the sms protocol
+	embsys_sms_protocol_mine.h	- sms protocol interface
+	smsModel.c			- implementation of the model part (see our remarks)
+	smsmodel.h			- model's interface
+	smsView.c			- implementation of the view part
+	smsView.h			- view's interface
+	smsController.c			- implementation of the controller part
+	smsController.h			- controller's interfcae
+	input_panel/input_panel.c	- input panel's driver
+	input_panel/input_panel.h	- input panel's driver's interface
+	flash/flash.c			- flash memory's driver
+	flash/flash.h			- flash memory's driver's interface
+	LCD/LCD.c			- LCD's driver
+	LCD/LCD.h			- LCD's driver's interface
+	network/network.c		- network card driver
+	network/network.h		- network card driver's interface
+	timer/timer.c			- timer driver
+	timer/timer.h			- timer driver's interface
+	TX/tx_api.h			- threadX api
+	TX/tx_port.h			- porintg of TX for ARC enviroment
+	TX/tx.a				- tx compiled and linkded library
+	
+============================remarks====================================
+
+system designe didn't change. you can read ex3's README for our elaboration about it.
+
+we will focuse on the FS design and on the optimization design.
+
+FILE SYSTEM DESIGN
+------------------
+
+ * every 4Kb is called EraseUnit since this is the smallest unit the flash can erase
+ 
+ * our 64Kb flash composed of 16 EraseUnits (blocks), our FS uses 15 EraseUnits to store files and one EraseUnit (a.k.a the Log) for compaction process (we will elaborate about that)
+ 
+ * when file need to be written, we appilys First Fit Algoritm and place it at the first free slot we find.
+ 
+ * when not enough free space been found, we try to compact some EraseUnit. we check if EraseUnit's free space + EraseUnit obsolete space (=space of deleted files) will be enough 
+   to host the new file, if yes, we moving the valid files of the EraseUnit to the log, erasing the EraseUnit and converting it to the new log, the previouse log will become regular EraseUnit 
+   and will host the new file
+   
+ * to achive atomicity, we took advanage of the fact that we using NOR flash in which bits been turn off. every such operation has "valid" bit, we performing the operation which leaving this valid bit
+   as "1" and only then we changing this bit only to "0". this chnage is atomic since we turning off one bit only and this valid bit indicates that whole section is valid.
+   
+ * we developed fail safe mechanism to ensure that every operation either will succeed or fail without corrupting the FS no matter what happened (as long as no one from the outside chnage the flash bits)
+   1. write file - every file has "valid" bit, if this bit wasen't set at the end of the write, we ignore the file (file will be considered as deleted)
+   2. delete file - we implemented the delete operation as turning the "obsolete" bit of the file from 1 to 0, thus, this operation is atomic
+   3. EraseUnit compaction - we saved the last 4 bytes of the Log to save some essential info about the compaction. when we loading the FS during boot, we check those 4 bytes, and if the "complete" bit is
+      not '0' we continue from the point we failed last time (we know when we failed by some controll bits inside those 4 bytes)
+	  
+ * corruption from the outside - every EraseUnit has some special value (canary) after its header. when loading the FS during boot, we check those canaries, and if more than one is missing (one can be missing if
+   during the block erase we crashed, if one canary is missing, we check that the EraseUnit is indeed the erase unit we wrote at the log's last 4 bytes) if so, we have a reson to belive our FS is corrupted by some
+   attacker or by malfunction and we re-install the FS structure and getting new and empty FS.
+   
+ * BONUS PART - we implemented ware out mechanism. every EraseUnit has "Erase Number" which is the number of erasure this EraseUnit had. when we searching for block to erase (because we want to write file and don't have
+				enough free space) we search for the EraseUnit with lowest Erase Number value which has enough space. this way will lead to uniform distribution of EraseUnits' erasures if we assume that when deleting a file every
+				file has the same probability to be deleted.
+				
+				we stessed the FS with maximum file's size fs_write("file",buf,512) with the same file name - every write will delete the previosue file "file". we did it few thousends of times and monitored the Erase Number distribution.
+				we found that it was Uniform Distribution all along.
+
+
+OPTIMIZATIONS
+-------------
+
+* our file system design squeezed flash capacity and we managed to achive the requirements and even more (up to 105 files of 0.5Kb or 4710 files of 0Kb)
+  with 64Kb flash.
+
+
+thanks,
+Avishai & Matan
