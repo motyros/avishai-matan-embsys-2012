@@ -15,6 +15,7 @@ typedef enum
 } message_type;
 
 #define MAX_NUM_SMS (100)
+
 /*
 typedef struct _SMS_DELIVER {
 
@@ -44,14 +45,26 @@ struct SmsLinkNode
         SmsLinkNodePtr  pNext;
         SmsLinkNodePtr  pPrev;
         message_type    type;
-        void*                   pSMS;
+		char title[ID_MAX_LENGTH];
+		uint_8 fileName;
 };
-
 
 /*
  * initialize the structs
  */
 UINT modelInit();
+
+/*
+  Description:
+	Gets the sms data by the given file name.
+
+  Arguments:
+	fileName - the name of the file.
+	smsSize - when calling the function this argument should hold the size of the 'data' input buffer.
+			 when the function return this argument will hold the file size, i.e. the actual used space size of the 'data' buffer.
+	data - a pointer for a buffer to hold the file content.
+*/
+UINT modelGetSmsByFileName(const uint_8 fileName, unsigned* smsSize, char* data);
 
 /*
  * get the enum of the current been displayed screen
@@ -145,5 +158,4 @@ TX_STATUS modelAcquireLock();
 TX_STATUS modelReleaseLock();
 
 #endif
-
 
