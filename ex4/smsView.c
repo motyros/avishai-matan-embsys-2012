@@ -166,44 +166,46 @@ void setMessageListingLineInfo(SmsLinkNodePtr pSms,int serialNumber,CHAR* pLine)
 	int leftDigit = serialNumber/10;
 	int rightDigit = serialNumber%10;
 
-	SMS_DELIVER* pInSms;
-	SMS_SUBMIT* pOutSms;
 
 	*pLine++ = INT_TO_CH(leftDigit);
 	*pLine++ = INT_TO_CH(rightDigit);
 	*pLine++ = ' ';
 
-	if (pSms->type == INCOMMING_MESSAGE)
+	switch(pSms->type)
 	{
-		pInSms = (SMS_DELIVER*)pSms->pSMS;
-
-		for(i = 0 ; (pInSms->sender_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
+	case INCOMMING_MESSAGE:
 		{
-			*pLine++ = pInSms->sender_id[i];
-		}
+			//pInSms = (SMS_DELIVER*)pSms->pSMS;
 
-		for(;i<ID_MAX_LENGTH ; ++i)
-		{
-			*pLine++ = ' ';
+			for(i = 0 ; (pSms->title[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
+			{
+				*pLine++ = pSms->title[i];
+			}
+
+			for(;i<ID_MAX_LENGTH ; ++i)
+			{
+				*pLine++ = ' ';
+			}
+			*pLine++ = 'I';
+			break;
 		}
-		*pLine++ = 'I';
+	case OUTGOING_MESSAGE:
+		{
+			//pOutSms = (SMS_SUBMIT*)pSms->pSMS;
+
+			for(i = 0 ; (pSms->title[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
+			{
+				*pLine++ = pSms->title[i];
+			}
+
+			for(;i<ID_MAX_LENGTH ; ++i)
+			{
+				*pLine++ = ' ';
+			}
+			*pLine++ = 'O';
+			break;
+		}
 	}
-	else
-	{
-		pOutSms = (SMS_SUBMIT*)pSms->pSMS;
-
-		for(i = 0 ; (pOutSms->recipient_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
-		{
-			*pLine++ = pOutSms->recipient_id[i];
-		}
-
-		for(;i<ID_MAX_LENGTH ; ++i)
-		{
-			*pLine++ = ' ';
-		}
-		*pLine++ = 'O';
-	}
-
 }
 
 /*
@@ -410,11 +412,13 @@ void renderMessageDisplayScreen()
 		CHAR line[SCREEN_WIDTH];
 		INT i;
 		memset(line,' ',SCREEN_WIDTH);
-
+		unsigned length;
 		if (pMessage->type == INCOMMING_MESSAGE)
 		{
-
-			SMS_DELIVER* pInMsg = (SMS_DELIVER*)pMessage->pSMS;
+			SMS_DELIVER inMsg;
+			SMS_DELIVER* pInMsg = &inMsg;
+			length = sizeof(SMS_DELIVER);
+			modelGetSmsByFileName(pMessage->fileName, &length, (char*)pInMsg);//SMS_DELIVER* pInMsg = (SMS_DELIVER*)pMessage->pSMS;
 
 			//set time stamp
 			setTimeFromTimeStamp(line,pInMsg->timestamp);
@@ -443,7 +447,13 @@ void renderMessageDisplayScreen()
 		{
 			lcd_set_row_without_flush(1,false,line,SCREEN_WIDTH);
 
-			SMS_SUBMIT* pOutMsg = (SMS_SUBMIT*)pMessage->pSMS;
+			//SMS_SUBMIT* pOutMsg = (SMS_SUBMIT*)pMessage->pSMS;
+			SMS_DELIVER outMsg;
+			SMS_DELIVER* pOutMsg = &outMsg;
+			length = sizeof(SMS_SUBMIT);
+			modelGetSmsByFileName(pMessage->fileName, &length, (char*)pOutMsg);
+
+
 			dataLength =pOutMsg->data_length;
 			pMessageBuffer =pOutMsg->data;
 			for(i = 0 ; (pOutMsg->recipient_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
