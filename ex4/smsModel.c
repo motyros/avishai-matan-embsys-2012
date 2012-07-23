@@ -1,5 +1,6 @@
 #include "smsModel.h"
 #include "embsys_sms_protocol_mine.h"
+#include "fs.h"
 
 
 #define SMS_BLOCK_SIZE (sizeof(SMS_DELIVER))
@@ -9,7 +10,7 @@
 
 #define SMS_DB_BLOCK_SIZE (sizeof(SmsLinkNode))
 #define SMS_DB_POOL_REAL_SIZE (MAX_NUM_SMS*(SMS_DB_BLOCK_SIZE+BLOCK_OVERHEAD))
-
+#define MAX_DB_SIZE 100
 
 //the block of memory for the pool with all the smses 
 CHAR gSmsBlockPool[SMS_POOL_REAL_SIZE];
@@ -23,6 +24,9 @@ typedef struct
         SmsLinkNodePtr  pTail;
         int             size;
 }SmsLinkedList;
+
+//cunter for the file names
+uint_8 gFileCunter;
 
 //the sms linked list data-base
 SmsLinkedList gSmsDb;
@@ -54,6 +58,8 @@ TX_BLOCK_POOL gSmsLinkListPool;
 //the lock on the smsModel
 TX_MUTEX gModelMutex;
 
+FS_STATUS fillLinkedList(unsigned fileCount);
+
 UINT modelInit()
 {
         UINT status;
@@ -63,21 +69,6 @@ UINT modelInit()
         {
                 return status;
         }
-
-        /* Create a memory pool whose total size is for 100 SMS (the overhead
-         * of the block is sizeof(void *).
-         * starting at address 'gSmsBlockPool'. Each block in this
-         * pool is defined to be SMS_BLOCK_SIZE==sizeof(SMS_DELIVER) bytes long.
-         */
-        status = tx_block_pool_create(&gSmsPool, "SmsPool",
-                        SMS_BLOCK_SIZE, gSmsBlockPool, SMS_POOL_REAL_SIZE);
-        /* If status equals TX_SUCCESS, gSmsPool contains 100
-         * memory blocks of SMS_BLOCK_SIZE bytes each. The reason
-         * there are not more/less blocks in the pool is
-         * because of the one overhead pointer associated with each
-         * block.
-         */
-        if(status != TX_SUCCESS) return status;
 
         //create a pool that stores all the nodes of the sms linked list
         /* Create a memory pool whose total size is for 100 nodes (the overhead
@@ -97,27 +88,91 @@ UINT modelInit()
 
         memset(&gInEditSms,0,sizeof(SMS_SUBMIT));
 
-        //init the list to empty
-        gSmsDb.pHead = NULL;
-        gSmsDb.pTail = NULL;
-        gSmsDb.size = 0;
+		unsigned fileCount = 0;
+		FS_STATUS fsStatus = fs_count(&file_count);
 
-        //TODO - remove this
-        /*SMS_DELIVER d;
-        d.data[0] = 'a';
-        d.data_length = 1;
-        memcpy(d.sender_id,"12345678",8);
-        memcpy(d.timestamp,"02062011390508",14);
-        int i;
-        for(i = 0 ; i < 20 ; ++i)
-        {
-        	modelAddSmsToDb(&d,INCOMMING_MESSAGE);
-        }
-        gpSelectedSms = modelGetFirstSms();
-        gpFirstSmsOnScreen = modelGetFirstSms();
-        */
-        return TX_SUCCESS;
+			//init the list to empty
+			gSmsDb.pHead = NULL;
+			gSmsDb.pTail = NULL;
+			gSmsDb.size = 0;
 
+		//the file system is empty
+		if(fileCount==0)
+		{
+			return TX_SUCCESS;
+		}
+
+		//else the file system not empty
+		fsStatus = fillLinkedList(fileCount);
+					
+
+
+
+
+        return fsStatus;
+
+}
+
+FS_STATUS createAndAddSmsLinkNodeToDB(uint_8 fileName, const message_type type, char* data)
+{
+	FS_STATUS fsStatus;
+	UINT txStatus;
+	SmsLinkNodePtr pNewSms;
+	//allocate mem
+	txStatus = allocateMemInPool(pNewSms);
+	if(txStatus != TX_SUCCESS) return FAILURE;
+
+	//fill it's fields
+	fsStatus = fillSmsNodeFields(fileName, type, pNewSms, data);
+	//add to the linked list
+	addSmsToLinkedList(pNewSms);
+
+
+	return fsStatus;
+
+}
+
+FS_STATUS fillLinkedList(unsigned fileCount)
+{
+	FS_STATUS fsStatus;
+		unsigned i;
+		unsigned smsSize = SMS_BLOCK_SIZE;
+		char data[SMS_BLOCK_SIZE];
+		uint_8 fileName[1];
+		//read all files
+		for ( i = 0 ; i < fileCount ; ++i )
+		{
+			//read the file by index
+			fsStatus = fs_read_by_index( i, &smsSize, (char*)data);
+			//get it's name
+			fsStatus = fs_get_filename_by_index(i, (char*) fileName)
+
+			if(smsSize == sizeof(SMS_DELIVER))
+			{
+				fsStatus = createAndAddSmsLinkNodeToDB(fileName, INCOMMING_MESSAGE, (char*)data);
+			}
+			else if(smsSize == sizeof(SMS_SUBMIT))
+			{
+				fsStatus = createAndAddSmsLinkNodeToDB(fileName, OUTGOING_MESSAGE, (char*)data);, 
+			}
+			else
+			{
+				continue;
+			}
+		}
+
+
+
+	return fsStatus;
+}
+
+void* modelGetSmsByFileName(uint_8 fileName)
+{
+	unsigned smsSize = SMS_BLOCK_SIZE;
+	data[SMS_BLOCK_SIZE];
+	FS_STATUS status = fs_read(&fileName, &smsSize, data);
+	if(status != SUCCESS) return NULL;
+	return data; this is on the stack!
 }
 
 screen_type modelGetCurentScreenType()
@@ -161,46 +216,79 @@ void updateHeadAndTailCyclic()
 }
 
 
-UINT modelAddSmsToDb(void* pSms,const message_type type)
+uint_8 findFileName()
 {
-        DBG_ASSERT(pSms != NULL);
+		uint_8 fileName;
+		int tempDataLength = 1;
+		char tempData[1];
+		FS_STATUS sta;
+		do
+		{
+			//get the next name
+			fileName = (uint_8)(gFileCunter%MAX_DB_SIZE);//[FILE_NAME_LENGTH];
+			//check if the name is available
+			sta = fs_read(&fileName, &tempDataLength, (char*)tempData);
+			gFileCunter++;
+		}while(sta != FILE_NOT_FOUND);//sta == SUCCESS
 
-        UINT status;
+		return fileName;
 
-        SmsLinkNodePtr pNewSms;
+}
 
+FS_STATUS fillTitle(const message_type type, SmsLinkNodePtr pNewSms, char* data)
+{
+	DBG_ASSERT(pNewSms != NULL);
+	DBG_ASSERT(data != NULL);
+	SMS_DELIVER* pInSms;
+	SMS_SUBMIT* pOutSms;
+	int i;
+	switch(type)
+	{
+	case INCOMMING_MESSAGE:
+		//mesType = 'I';
+		pInSms = (SMS_DELIVER*)data;
+		//set the title
+		for(i = 0 ; (pInSms->sender_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
+		{
+			*(pNewSms->title)++ = pInSms->sender_id[i];
+		}
+		return SUCCESS;
 
-        //allocate a memory block for the linked list node, form the SmsLinkListPool
-        status = tx_block_allocate(&gSmsLinkListPool, (VOID**) &pNewSms,TX_NO_WAIT);
-        /* If status equals TX_SUCCESS, pNewNode contains the
-         * address of the allocated block of memory.
-         */
+	case OUTGOING_MESSAGE:
+		//mesType = 'O';
+		pOutSms = (SMS_SUBMIT*)data;
+		//set the title
+		for(i = 0 ; (pOutSms->recipient_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
+		{
+			*(pNewSms->title)++ = pOutSms->recipient_id[i];
+		}
+		return SUCCESS;
+	}
+	return COMMAND_PARAMETERS_ERROR;
+}
 
-        if(status != TX_SUCCESS) return status;
+FS_STATUS writeSmsToFileSystem(const message_type type, SmsLinkNodePtr pNewSms, char* data)
+{
+	DBG_ASSERT(pNewSms != NULL);
+	DBG_ASSERT(data != NULL);
+	switch(type)
+	{
+	case INCOMMING_MESSAGE:
+		//add the sms-deliver to the file system
+		return fs_write(pNewSms->fileName, sizeof(SMS_DELIVER), data);
 
+	case OUTGOING_MESSAGE:
+		//add the sms-submit to the file system
+		return fs_write(pNewSms->fileName, sizeof(SMS_SUBMIT), data);
 
-        // Allocate a memory block for the sms, from the SmsPool.
-        status = tx_block_allocate(&gSmsPool, (VOID**) &pNewSms->pSMS,TX_NO_WAIT);
-        /* If status equals TX_SUCCESS, pSms contains the
-         * address of the allocated block of memory.
-         */
-         
-         //in case the allocate fail release the block of the sms node
-        if(status != TX_SUCCESS)
-        {
-            tx_block_release(pNewSms);
-                return status;
-        }
+	}
+	return COMMAND_PARAMETERS_ERROR;
 
-        //set the fields of the linked list node
-        pNewSms->pNext = NULL;
-        pNewSms->pPrev = gSmsDb.pTail;
-        pNewSms->type = type;
+}
 
-        //copy the given sms to the allocated memory
-        memcpy(pNewSms->pSMS,pSms,SMS_BLOCK_SIZE);
-
-        //in case the list is empty
+void addSmsToLinkedList(SmsLinkNodePtr pNewSms);
+{
+	        //in case the list is empty
         if(gSmsDb.size == 0)
         {
                 DBG_ASSERT(gSmsDb.pHead == NULL);
@@ -242,6 +330,60 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 
         //increase the size of the linked list
         gSmsDb.size++;
+
+}
+UINT allocateMemInPool(SmsLinkNodePtr pNewSms)
+{
+	DBG_ASSERT(pNewSms != NULL);
+	    //allocate a memory block for the linked list node, form the SmsLinkListPool
+        return = tx_block_allocate(&gSmsLinkListPool, (VOID**) &pNewSms,TX_NO_WAIT);
+        /* If status equals TX_SUCCESS, pNewNode contains the
+         * address of the allocated block of memory.
+         */
+ 
+}
+
+FS_STATUS fillSmsNodeFields(uint_8 fileName, const message_type type, SmsLinkNodePtr pNewSms,char* pSms)
+{
+
+	
+
+	FS_STATUS fsStatus = fillTitle(type, pNewSms, pSms);
+		
+
+	    //set the fields of the linked list node
+        pNewSms->pNext = NULL;
+        pNewSms->pPrev = gSmsDb.pTail;
+        pNewSms->type = type;
+		pNewSms->fileName = fileName;
+
+		return fsStatus;
+
+}
+
+
+UINT modelAddSmsToDb(void* pSms,const message_type type)
+{
+        DBG_ASSERT(pSms != NULL);
+
+		SmsLinkNodePtr pNewSms;
+        UINT txStatus = allocateMemInPool(pNewSms);
+		FS_STATUS fsStatus;
+
+ 
+        if(status != TX_SUCCESS) return status;
+
+		uint_8 fileName = findFileName();
+
+		fsStatus = fillSmsNodeFields(fileName, type, pNewSms,(char*)pSms);
+		
+		fsStatus = writeSmsToFileSystem(type,pNewSms,(char*)pSms);
+
+		addSmsToLinkedList(pNewSms);
+
+        //copy the given sms to the allocated memory
+//        memcpy(pNewSms->pSMS,pSms,SMS_BLOCK_SIZE);
+
         return status;
 }
 
@@ -260,13 +402,8 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
                 return TX_PTR_ERROR;
         }
 
-        // Release a memory block back to the smses pool.
-        status = tx_block_release(pSms->pSMS);
-        /* If status equals TX_SUCCESS, the block of memory pointed
-         * to by pSms->pSMS has been returned to the pool.
-         */
-
-        //if(status != TX_SUCCESS) return status;
+		//erase the sms from the file system
+		status = fs_erase(pSms->fileName);
 
         //if the node is the last node in the list, so the node is 
         //the head and the tail of the list.
@@ -400,7 +537,3 @@ TX_STATUS modelReleaseLock()
 {
 	return tx_mutex_put(&gModelMutex);
 }
-
-
-
-
