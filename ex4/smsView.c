@@ -415,10 +415,11 @@ void renderMessageDisplayScreen()
 		unsigned length;
 		if (pMessage->type == INCOMMING_MESSAGE)
 		{
+			//SMS_DELIVER* pInMsg = (SMS_DELIVER*)pMessage->pSMS;
 			SMS_DELIVER inMsg;
 			SMS_DELIVER* pInMsg = &inMsg;
 			length = sizeof(SMS_DELIVER);
-			modelGetSmsByFileName(pMessage->fileName, &length, (char*)pInMsg);//SMS_DELIVER* pInMsg = (SMS_DELIVER*)pMessage->pSMS;
+			modelGetSmsByFileName((uint_8)pMessage->fileName, &length, (char*)pInMsg);
 
 			//set time stamp
 			setTimeFromTimeStamp(line,pInMsg->timestamp);
@@ -451,7 +452,7 @@ void renderMessageDisplayScreen()
 			SMS_DELIVER outMsg;
 			SMS_DELIVER* pOutMsg = &outMsg;
 			length = sizeof(SMS_SUBMIT);
-			modelGetSmsByFileName(pMessage->fileName, &length, (char*)pOutMsg);
+			modelGetSmsByFileName((uint_8)pMessage->fileName, &length, (char*)pOutMsg);
 
 
 			dataLength =pOutMsg->data_length;
@@ -470,11 +471,8 @@ void renderMessageDisplayScreen()
 
 		lcd_set_row_without_flush(0,true,line,SCREEN_WIDTH);
 
-
 		UINT fullLines = dataLength/SCREEN_WIDTH;
 		UINT lineIndex;
-
-
 
 		//print message lines that takes full line
 		for(i = 0,lineIndex=2 ; i < fullLines ; ++i,++lineIndex)
@@ -544,4 +542,5 @@ bool viewIsLastRowSelected()
 {
 	return (gSelectedLineIndex+1 == modelGetSmsDbSize())|| (gSelectedLineIndex+1==(SCREEN_HEIGHT-1));
 }
+
 
