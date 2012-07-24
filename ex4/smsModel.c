@@ -90,6 +90,11 @@ UINT modelInit()
 	unsigned fileCount = 0;
 	FS_STATUS fsStatus = fs_count(&file_count);
 
+	if(fsStatus != SUCCESS)
+	{
+		return fsStatus;?
+	}
+
 	//init the list to empty
 	gSmsDb.pHead = NULL;
 	gSmsDb.pTail = NULL;
@@ -108,7 +113,7 @@ UINT modelInit()
 
 }
 
-FS_STATUS createAndAddSmsLinkNodeToDB(uint_8 fileName, const message_type type, char* data)
+FS_STATUS createAndAddSmsLinkNodeToDB(uint_8* fileName, const message_type type, char* data)
 {
 	FS_STATUS fsStatus;
 	UINT txStatus;
@@ -131,36 +136,42 @@ FS_STATUS fillLinkedList(unsigned fileCount)
 	unsigned i;
 	unsigned smsSize = SMS_BLOCK_SIZE;
 	char data[SMS_BLOCK_SIZE];
-	uint_8 fileName[1];
+	uint_8 fileName[SMS_FILE_NAME_LENGTH] = {0};
 	//read all files
 	for ( i = 0 ; i < fileCount ; ++i )
 	{
 		//read the file by index
 		fsStatus = fs_read_by_index( i, &smsSize, (char*)data);
-		//get it's name
-		fsStatus = fs_get_filename_by_index(i, (char*) fileName)
 
-			if(smsSize == sizeof(SMS_DELIVER))
-			{
-				fsStatus = createAndAddSmsLinkNodeToDB(fileName, INCOMMING_MESSAGE, (char*)data);
-			}
-			else if(smsSize == sizeof(SMS_SUBMIT))
-			{
-				fsStatus = createAndAddSmsLinkNodeToDB(fileName, OUTGOING_MESSAGE, (char*)data);, 
-			}
-			else
-			{
-				continue;
-			}
+		//in case there is problems with the file, continue to the next file
+		if(fsStatus != SUCCESS) continue;
+
+		//get it's name
+		fsStatus = fs_get_filename_by_index(i, (char*) fileName);
+		//in case there is problems with the filename, continue to the next file
+		if(fsStatus != SUCCESS) continue;
+
+		//add the sms acording to the data
+		if(smsSize == sizeof(SMS_DELIVER))
+		{
+			fsStatus = createAndAddSmsLinkNodeToDB(fileName, INCOMMING_MESSAGE, (char*)data);
+		}
+		else if(smsSize == sizeof(SMS_SUBMIT))
+		{
+			fsStatus = createAndAddSmsLinkNodeToDB(fileName, OUTGOING_MESSAGE, (char*)data);, 
+		}
+		else
+		{
+			//in case there is problems with the file size, continue to the next file
+			continue;
+		}
 	}
 	return fsStatus;
 }
 
-UINT modelGetSmsByFileName(const uint_8 fileName, unsigned* smsSize, char* data)
+UINT modelGetSmsByFileName(const uint_8* fileName, unsigned* smsSize, char* data)
 {
-	//unsigned smsSize = SMS_BLOCK_SIZE;
-	//data[SMS_BLOCK_SIZE];
-	FS_STATUS status = fs_read(&fileName, &smsSize, data);
+	FS_STATUS status = fs_read(fileName, &smsSize, data);
 	if(status != SUCCESS) return TX_NO_INSTANCE;?
 	return TX_SUCCESS;
 }
@@ -277,6 +288,7 @@ FS_STATUS writeSmsToFileSystem(const message_type type, SmsLinkNodePtr pNewSms, 
 
 void addSmsToLinkedList(SmsLinkNodePtr pNewSms);
 {
+	DBG_ASSERT( pNewSms != NULL);
 	//in case the list is empty
 	if(gSmsDb.size == 0)
 	{
@@ -324,23 +336,27 @@ void addSmsToLinkedList(SmsLinkNodePtr pNewSms);
 
 UINT allocateMemInPool(SmsLinkNodePtr pNewSms)
 {
-	DBG_ASSERT(pNewSms != NULL);
 	//allocate a memory block for the linked list node, form the SmsLinkListPool
-	return = tx_block_allocate(&gSmsLinkListPool, (VOID**) &pNewSms,TX_NO_WAIT);
+	return tx_block_allocate(&gSmsLinkListPool, (VOID**) &pNewSms,TX_NO_WAIT);
 	/* If status equals TX_SUCCESS, pNewNode contains the
 	* address of the allocated block of memory.
 	*/
 }
 
-FS_STATUS fillSmsNodeFields(uint_8 fileName, const message_type type, SmsLinkNodePtr pNewSms,char* pSms)
+FS_STATUS fillSmsNodeFields(uint_8* fileName, const message_type type, SmsLinkNodePtr pNewSms,char* pSms)
 {
+	DBG_ASSERT(pNewSms != NULL);
 	FS_STATUS fsStatus = fillTitle(type, pNewSms, pSms);
 
 	//set the fields of the linked list node
 	pNewSms->pNext = NULL;
 	pNewSms->pPrev = gSmsDb.pTail;
 	pNewSms->type = type;
-	pNewSms->fileName = fileName;
+	int i;
+	for(i = 0; i < SMS_FILE_NAME_LENGTH ; ++i)
+	{
+		pNewSms->fileName[i] = fileName[i];
+	}
 
 	return fsStatus;
 }
