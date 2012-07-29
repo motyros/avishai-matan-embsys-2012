@@ -24,8 +24,8 @@ typedef enum
 
 //calculate the byte offset of field inside a struct
 #define MY_OFFSET(type, field) ((unsigned long ) &(((type *)0)->field))
-#define READ_LOG_ENTRY(logIndex,entry) (flash_read((logIndex+1)*FLASH_FLASH_BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
-#define WRITE_LOG_ENTRY(logIndex,entry) (flash_write((logIndex+1)*FLASH_FLASH_BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
+#define READ_LOG_ENTRY(logIndex,entry) (flash_read((logIndex+1)*FLASH_BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
+#define WRITE_LOG_ENTRY(logIndex,entry) (flash_write((logIndex+1)*FLASH_BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
 
 #pragma pack(1)
 
@@ -196,8 +196,8 @@ static FS_STATUS intstallFileSystem()
 		if (i > 0)
 		{
 			header.metadata.bits.type = DATA;
-            gEUList[i].nextFreeOffset = FLASH_FLASH_BLOCK_SIZE;
-            gEUList[i].bytesFree = FLASH_FLASH_BLOCK_SIZE-sizeof(EraseUnitHeader);
+            gEUList[i].nextFreeOffset = FLASH_BLOCK_SIZE;
+            gEUList[i].bytesFree = FLASH_BLOCK_SIZE-sizeof(EraseUnitHeader);
 		}
         else
         {
@@ -831,7 +831,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 			return FAILURE_ACCESSING_FLASH;
 		}
 		
-		tx_event_flags_get(gFsGlobalEventFlags,1,TX_AND_CLEAR,&acutalFlags,TX_WAIT_FOREVER);
+		tx_event_flags_get(&gFsGlobalEventFlags,1,TX_AND_CLEAR,&acutalFlags,TX_WAIT_FOREVER);
 		
         //set erase complete
         entry.bits.eraseComplete = 0;
@@ -1181,7 +1181,7 @@ FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
 		if (desc.size > *length)
 		{
 			status =  FAILURE;
-			beak;
+			break;
 		}
 
 		if (flash_read(FLASH_BLOCK_SIZE*euIdx + desc.offset,desc.size,(uint8_t*)data) != OPERATION_SUCCESS)
@@ -1388,7 +1388,7 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data)
 }
 
 
-
+/*
 void test()
 {
     int b[20],c[10];
@@ -1404,8 +1404,8 @@ void test()
 
    char data[MAX_FILE_SIZE];
    char filenames[(FILE_NAME_MAX_LEN+1)*1000];
-   unsigned filenamesSize = (FILE_NAME_MAX_LEN+1)*1000;
-   uint32_t fileSize,i,fc;
+   unsigned filenamesSize = (FILE_NAME_MAX_LEN+1)*1000,fc;
+   uint32_t fileSize,i;
 
    memset(data1,'a',MAX_FILE_SIZE);
    memset(data2,'b',MAX_FILE_SIZE);
@@ -1471,4 +1471,4 @@ void test()
    e.moveBlock.bits2.euToIndex = 0;
    */
 
-}
+//}
