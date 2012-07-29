@@ -1,0 +1,12 @@
+-toggle=include_local_symbols=1
+-initiallog=logfile
+-profile
+-sim
+-a6
+-toggle=deadbeef=1
+-Xtimer0
+-simextp=/cs/course/current/embsys/www/embsys_pager.so,ROM=2,RAM=1
+-simextp=/cs/course/current/embsys/www/embsys_flash.so,size=16
+-simextp=/cs/course/current/embsys/www/embsys_uart.so
+-simextp=/cs/course/current/embsys/www/embsys_halt.so
+-mem=0

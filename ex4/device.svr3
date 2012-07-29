@@ -1,0 +1,26 @@
+//memory mapping file. file format taken from lecture 3 slides (Embedded Systems Building)
+
+ROM_START = 0x0;
+ROM_SIZE = 32K;
+SRAM_START = 0x80000;
+SRAM_SIZE = 64K;
+
+MEMORY {
+    MYROM: ORIGIN = ROM_START,  LENGTH = ROM_SIZE
+    MYRAM: ORIGIN = SRAM_START, LENGTH = SRAM_SIZE
+}
+
+INITDATA !data
+
+SECTIONS {
+    GROUP: {
+		INTERRUPT_TABLE : {}
+        * (TEXT) : {}
+        * (LIT)  : {}
+    } > MYROM
+    GROUP : {
+        * (DATA) : {}
+        * (BSS)  : {}
+        .stack ALIGN(4) SIZE(DEFINED _STACKSIZE?_STACKSIZE:1K): {}
+    } > MYRAM
+}
