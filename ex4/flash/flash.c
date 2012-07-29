@@ -2,9 +2,6 @@
 #include "../common_defs.h"
 #include "../TX/tx_api.h"
 
-#define FLASH_CAPACITY (64*1024)
-#define FLASH_BLOCK_SIZE (4*1024)
-
 //flash HW definitions
 #define NUM_OF_DATA_REG 16
 #define FLASH_BASE_ADDR 0x150
@@ -17,7 +14,7 @@
 #define FLASH_FDATA_BASE_ADDR (FLASH_BASE_ADDR+0x3)
 
 //wait for the flash hardware to be idle
-#define wait_for_flash_to_be_idle tx_event_flags_get(&gFlashEventFlags,1,TX_AND_CLEAR,TX_WAIT_FOREVER)
+#define wait_for_flash_to_be_idle(actualFlags) tx_event_flags_get(&gFlashEventFlags,1,TX_AND_CLEAR,&actualFlags,TX_WAIT_FOREVER)
 
 #define MIN(a,b) ((a)>(b)?(b):(a))
 
@@ -252,12 +249,12 @@ result_t flash_init(	void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32
 
 		if (tx_mutex_create(&gFlashGlobalLock,"flash global mutex",TX_NO_INHERIT) != TX_SUCCESS)
 		{
-			return GLOBAL_ERROR;
+			return GENERAL_ERROR;
 		}
 		
 		if (tx_event_flags_create(&gFlashEventFlags,"flash global event flags") != TX_SUCCESS)
 		{
-			return GLOBAL_ERROR;
+			return GENERAL_ERROR;
 		}
 		
 		return OPERATION_SUCCESS;
@@ -361,6 +358,7 @@ void loadDataFromRegs(uint8_t buffer[],const uint16_t size)
 
 result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 {
+    uint32_t actualFlags;
 	uint16_t readBytes = 0;
 	uint16_t transactionBytes;
 	FlashControlRegister cr = {0};
@@ -413,7 +411,7 @@ result_t flash_read(uint16_t start_address, uint16_t size, uint8_t buffer[])
 		_sr(cr.data,FLASH_CONTROL_REG_ADDR);
 
 		//wait for the flash hardware to be idle
-		wait_for_flash_to_be_idle;
+		wait_for_flash_to_be_idle(actualFlags);
 
 		//load the date from the flash regs
 		loadDataFromRegs(buffer+readBytes,transactionBytes);
@@ -493,6 +491,7 @@ void loadDataToRegs(const uint8_t buffer[],const uint16_t size)
 result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer[])
 {
 
+    uint32_t actualFlags;
 	uint16_t writtenBytes = 0;
 	uint16_t transactionBytes;
 	FlashControlRegister cr = {0};
@@ -552,7 +551,7 @@ result_t flash_write(uint16_t start_address, uint16_t size, const uint8_t buffer
 		writtenBytes+=transactionBytes;
 
 		//wait for the flash hardware to be idle
-		wait_for_flash_to_be_idle;
+		wait_for_flash_to_be_idle(actualFlags);
 	}
 
 	gCurrentCommand = IDLE;

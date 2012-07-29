@@ -1,12 +1,11 @@
 #include "fs.h"
-#include "flash.h"
-#include "common_defs.h"
+#include "../flash/flash.h"
+#include "../common_defs.h"
 #include "../TX/tx_api.h"
 #include <string.h>
 
 #define FILE_NAME_MAX_LEN (8)
-#define ERASE_UNITS_NUMBER (FLASH_SIZE/BLOCK_SIZE)
-#define wait_for_flash_done
+#define ERASE_UNITS_NUMBER (FLASH_CAPACITY/FLASH_BLOCK_SIZE)
 #define MAX_FILE_SIZE 512
 #define MAX_FILES_CAPACITY 1000
 #define FILE_NOT_FOUND_EU_INDEX ERASE_UNITS_NUMBER
