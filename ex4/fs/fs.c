@@ -1,6 +1,7 @@
 #include "fs.h"
 #include "flash.h"
 #include "common_defs.h"
+#include "../TX/tx_api.h"
 #include <string.h>
 
 #define FILE_NAME_MAX_LEN (8)
@@ -139,7 +140,8 @@ static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pNextAct
 static bool isFilenameMatchs(SectorDescriptor *pSecDesc,const char* filename);
 static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSecDesc,uint8_t *pEuIndex,uint16_t* pSecActualIndex);
 static FS_STATUS eraseFileFromFS(const char* filename);
-
+static void flash_data_recieve_cb(uint8_t const *buffer, uint32_t size);
+static void flash_request_done_cb(void);
 /**** Forward Declaration End*****/
 
 //hold the data we need about every EraseUnit. will save flash IO operations
@@ -147,6 +149,15 @@ static EraseUnitLogicalHeader gEUList[ERASE_UNITS_NUMBER];
 
 static uint8_t gLogIndex;
 static uint16_t gFilesCount = 0;
+
+static TX_EVENT_FLAGS_GROUP gFsGlobalEventFlags;
+static TX_MUTEX gFsGlobalLock;
+static bool gFsIsReady = false;
+
+//wrappers functions for all none blockinf flash functions
+
+
+
 
 
 /*
@@ -157,7 +168,8 @@ static FS_STATUS intstallFileSystem()
 	
 	int i;
 	uint16_t euAddress = 0;
-    
+    uint32_t acutalFlags;
+	
 	EraseUnitHeader header;
 
     memset(&header,0xFF,sizeof(EraseUnitHeader));
@@ -174,7 +186,7 @@ static FS_STATUS intstallFileSystem()
         return FAILURE_ACCESSING_FLASH;
     }
 
-	wait_for_flash_done;
+	tx_event_flags_get(gFsGlobalEventFlags,1,TX_AND_CLEAR,&acutalFlags,TX_WAIT_FOREVER);
 	
 	
 	//2. write each EraseUnitHeader + update the data structure of the EU's logical metadata.
@@ -500,11 +512,20 @@ static FS_STATUS loadFilesystem()
 }
 
 
-FS_STATUS fs_init(const FS_SETTINGS settings)
+static void flash_data_recieve_cb(uint8_t const *buffer, uint32_t size)
 {
-   (settings);
-   return loadFilesystem();
+	(buffer);
+	(size);
+	DBG_ASSERT(false);
 }
+
+static void flash_request_done_cb(void)
+{
+	tx_event_flags_set(&gFsGlobalEventFlags,1,TX_OR);
+}
+
+
+
 
 /*
  * write new LogEntry with relevant data to the Log
@@ -714,11 +735,12 @@ static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned size)
 static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 {
 
-    EraseUnitHeader header;
+	EraseUnitHeader header;
+	uint32_t acutalFlags;
     uint16_t actualNextFileDescIdx = 0,secDescAddr,dataOffset;
     uint8_t i;
 	FS_STATUS status;
-
+	
     SectorDescriptor sec;
 
     //if the LogEntry we got is uninitilize one, init it with data
@@ -809,6 +831,9 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 		{
 			return FAILURE_ACCESSING_FLASH;
 		}
+		
+		tx_event_flags_get(gFsGlobalEventFlags,1,TX_AND_CLEAR,&acutalFlags,TX_WAIT_FOREVER);
+		
         //set erase complete
         entry.bits.eraseComplete = 0;
         
@@ -860,60 +885,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 
 }
 
-FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
-{
-   LogEntry entry;
-   FS_STATUS status;
-   uint8_t euIndex,oldLogIndex;
-   
-   if (filename == NULL || data == NULL)
-   {
-      return COMMAND_PARAMETERS_ERROR;
-   }
 
-   if (length > MAX_FILE_SIZE)
-   {
-      return MAXIMUM_FILE_SIZE_EXCEEDED;
-   }
-
-   if (gFilesCount > MAX_FILES_CAPACITY)
-   {
-      return MAXIMUM_FILES_CAPACITY_EXCEEDED;
-   }
-
-   //try to find free space
-   if (findFreeEraseUnit(length,&euIndex))
-   {
-		status = eraseFileFromFS(filename);
-		if (status != SUCCESS && status != FILE_NOT_FOUND)
-		{
-			return status;
-		}
-		return writeFile(filename,length,data,euIndex);
-        
-   }
-   //try to find EraseUnit that after compaction will have enough space 
-   else if (findEraseUnitToCompact(&euIndex,length+sizeof(SectorDescriptor)))
-   {
-       entry.data = FLASH_UNINIT_4_BYTES;
-       oldLogIndex = gLogIndex;
-       if (CompactBlock(euIndex,entry) == SUCCESS)
-       {
-			//erase previouse file with same name if such exist
-		    status = eraseFileFromFS(filename);
-			
-			if (status != SUCCESS && status != FILE_NOT_FOUND)
-			{
-				return FAILURE_ACCESSING_FLASH;
-			}
-
-			//write the actual file
-			return writeFile(filename,length,data,oldLogIndex);
-       }
-   }
-   
-   return MAXIMUM_FLASH_SIZE_EXCEEDED;
-}
 
 /*
  * get the next valid sector descriptor inside a given EraseUnit
@@ -1023,67 +995,7 @@ static FS_STATUS getSectorDescriptor(const char* filename,SectorDescriptor *pSec
    return found?SUCCESS:FILE_NOT_FOUND;
 }
 
-FS_STATUS fs_filesize(const char* filename, unsigned* length)
-{
-   SectorDescriptor sec;
-   FS_STATUS status;
-   uint8_t secEuIdx;
-   
-   if (filename == NULL || length == NULL)
-   {
-	   return COMMAND_PARAMETERS_ERROR;
-   }
-   //search for this filename
-   status = getSectorDescriptor(filename,&sec,&secEuIdx,NULL);
 
-   if (status != SUCCESS)
-   {
-      return status;
-   }
-
-   *length = sec.size;
-   
-   return SUCCESS;
-   
-}
-
-FS_STATUS fs_read(const char* filename, unsigned* length, char* data)
-{
-   SectorDescriptor sec;
-   FS_STATUS status;
-   uint8_t secEuIndex;
-   
-   if (filename == NULL || length == NULL || data == NULL)
-   {
-	   return COMMAND_PARAMETERS_ERROR;
-   }
-
-   //get the file
-   status = getSectorDescriptor(filename,&sec,&secEuIndex,NULL);
-
-   if (status != SUCCESS)
-   {
-      return status;
-   }
-
-   //given buffer is to small
-   if (sec.size > *length)
-   {
-	   return FAILURE;
-   }
-
-   
-   *length = sec.size;
-   
-   //read the file's content
-   if (flash_read(BLOCK_SIZE*secEuIndex + sec.offset,sec.size,(uint8_t*)data) != OPERATION_SUCCESS)
-   {
-	   return FAILURE_ACCESSING_FLASH;
-   }
-   
-   return SUCCESS;
-   
-}
 
 /*
  * erase given filename from FS
@@ -1122,17 +1034,43 @@ static FS_STATUS eraseFileFromFS(const char* filename)
 FS_STATUS fs_erase(const char* filename)
 {
     FS_STATUS status;
-    //take lock
+	
+	if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+	
+	//take lock
+	if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+	{
+		return FS_IS_BUSY;
+	}
+    
     status = eraseFileFromFS(filename);
-    //release lock
+    
+	tx_mutex_put(&gFsGlobalLock);
+	
     return status;
 }
 
 FS_STATUS fs_count(unsigned* file_count)
 {
    //take the lock
+   if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+	
+	//take lock
+	if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+	{
+		return FS_IS_BUSY;
+	}
+	
    *file_count = gFilesCount;
 
+   tx_mutex_put(&gFsGlobalLock);
+   
    return SUCCESS;
 }
 
@@ -1144,11 +1082,23 @@ FS_STATUS fs_list(unsigned* length, char* files)
    uint8_t euIdx;
    uint8_t filenameLen;
    char fsFilename[FILE_NAME_MAX_LEN+1] = {'\0'};
+   FS_STATUS status = SUCCESS;
 
    if (files == NULL || length == NULL)
    {
 	   return COMMAND_PARAMETERS_ERROR;
    }
+   
+   if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+	
+	//take lock
+	if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+	{
+		return FS_IS_BUSY;
+	}
 
    for(euIdx = 0 ; euIdx < ERASE_UNITS_NUMBER ; ++euIdx)
    {
@@ -1170,7 +1120,8 @@ FS_STATUS fs_list(unsigned* length, char* files)
 		 //check if the given buffer long enough to store current file name + '\0'
          if ((uint16_t)(ansIndex + filenameLen + 1) > *length)
          {
-             return FAILURE;
+             status = FAILURE;
+			 break;
          }
          strcpy(&files[ansIndex],fsFilename);
          ansIndex+=(filenameLen+1);//+1 for the terminator '\0'
@@ -1179,8 +1130,10 @@ FS_STATUS fs_list(unsigned* length, char* files)
 
    *length  = ansIndex;
 
+   //return lock
+   tx_mutex_put(&gFsGlobalLock);
    
-   return SUCCESS;
+   return status;
 }
 
 FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
@@ -1188,43 +1141,254 @@ FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
     SectorDescriptor desc;
     uint16_t actualSecDesc;
     uint8_t euIdx = 0,i;
-    FS_STATUS status;
-    if (index >= gFilesCount)
-    {
-        return FILE_NOT_FOUND;
-    }
+    FS_STATUS status = SUCCESS;
+    
+	
+	if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+	
+	//take lock
+	if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+	{
+		return FS_IS_BUSY;
+	}
+	
+	do
+	{
+		if (index >= gFilesCount)
+		{
+			status = FILE_NOT_FOUND;
+			break;
+		}
 
-    while (index >= gEUList[euIdx].validDescriptors)
-    {
-        index-=gEUList[euIdx].validDescriptors;
-        ++euIdx;
-    }
+		while (index >= gEUList[euIdx].validDescriptors)
+		{
+			index-=gEUList[euIdx].validDescriptors;
+			++euIdx;
+		}
 
-    actualSecDesc = 0;
+		actualSecDesc = 0;
 
-    for(i = 0 ; i <= index ; ++i)
-    {
-        if ((status = getNextValidSectorDescriptor(euIdx,&actualSecDesc,&desc)) != SUCCESS)
-        {
-            return status;
-        }
-    }
+		for(i = 0 ; i <= index ; ++i)
+		{
+			if ((status = getNextValidSectorDescriptor(euIdx,&actualSecDesc,&desc)) != SUCCESS)
+			{
+				break;
+			}
+		}
 
-    if (desc.size > *length)
-    {
-        return FAILURE;
-    }
+		if (desc.size > *length)
+		{
+			status =  FAILURE;
+			beak;
+		}
 
-    if (flash_read(BLOCK_SIZE*euIdx + desc.offset,desc.size,(uint8_t*)data) != OPERATION_SUCCESS)
-    {
-        return FAILURE_ACCESSING_FLASH;
-    }
+		if (flash_read(BLOCK_SIZE*euIdx + desc.offset,desc.size,(uint8_t*)data) != OPERATION_SUCCESS)
+		{
+			status =  FAILURE_ACCESSING_FLASH;
+			break;
+		}
 
-    *length = desc.size;
+		*length = desc.size;
+		
+	}while(false);
 
-    return SUCCESS;
+	tx_mutex_put(&gFsGlobalLock);
+	
+    return status;
 
 }
+
+
+
+FS_STATUS fs_init(const FS_SETTINGS settings)
+{
+   
+   (settings);
+   
+   if (tx_event_flags_create(&gFsGlobalEventFlags,"fs global event flags") != TX_SUCCESS)
+   {
+		return FAILURE;
+   }
+   
+   if (tx_mutex_create(&gFsGlobalLock,"fs global lock",TX_NO_INHERIT) != TX_SUCCESS)
+   {
+		return FAILURE;
+   }
+   
+   if (flash_init(flash_data_recieve_cb,flash_request_done_cb) != OPERATION_SUCCESS)
+   {
+		return FAILURE;
+   }
+   
+   return loadFilesystem();
+}
+
+
+
+FS_STATUS fs_write(const char* filename, unsigned length, const char* data)
+{
+   LogEntry entry;
+   FS_STATUS status = MAXIMUM_FLASH_SIZE_EXCEEDED;
+   uint8_t euIndex,oldLogIndex;
+   
+   if (filename == NULL || data == NULL)
+   {
+      return COMMAND_PARAMETERS_ERROR;
+   }
+
+   if (length > MAX_FILE_SIZE)
+   {
+      return MAXIMUM_FILE_SIZE_EXCEEDED;
+   }
+
+   if (gFilesCount > MAX_FILES_CAPACITY)
+   {
+      return MAXIMUM_FILES_CAPACITY_EXCEEDED;
+   }
+
+   if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+	
+   if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+   {
+		return FS_IS_BUSY;
+   }
+   
+   do
+   {
+   
+	   //try to find free space
+	   if (findFreeEraseUnit(length,&euIndex))
+	   {
+			status = eraseFileFromFS(filename);
+			if (status != SUCCESS && status != FILE_NOT_FOUND)
+			{
+				status = FAILURE_ACCESSING_FLASH;
+				break;
+			}
+			status =  writeFile(filename,length,data,euIndex);
+			
+	   }
+	   //try to find EraseUnit that after compaction will have enough space 
+	   else if (findEraseUnitToCompact(&euIndex,length+sizeof(SectorDescriptor)))
+	   {
+		   entry.data = FLASH_UNINIT_4_BYTES;
+		   oldLogIndex = gLogIndex;
+		   if (CompactBlock(euIndex,entry) == SUCCESS)
+		   {
+				//erase previouse file with same name if such exist
+				status = eraseFileFromFS(filename);
+				
+				if (status != SUCCESS && status != FILE_NOT_FOUND)
+				{
+					status =  FAILURE_ACCESSING_FLASH;
+					break;
+				}
+
+				//write the actual file
+				status =  writeFile(filename,length,data,oldLogIndex);
+		   }
+	   }
+   }while(false);
+   
+   tx_mutex_put(&gFsGlobalLock);
+   
+   return status;
+}
+
+
+FS_STATUS fs_filesize(const char* filename, unsigned* length)
+{
+   SectorDescriptor sec;
+   FS_STATUS status;
+   uint8_t secEuIdx;
+   
+   if (filename == NULL || length == NULL)
+   {
+	   return COMMAND_PARAMETERS_ERROR;
+   }
+   
+   if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+	
+   if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+   {
+		return FS_IS_BUSY;
+   }
+   //search for this filename
+   status = getSectorDescriptor(filename,&sec,&secEuIdx,NULL);
+
+   *length = sec.size;
+   
+   tx_mutex_put(&gFsGlobalLock);
+   
+   return status;
+   
+}
+
+FS_STATUS fs_read(const char* filename, unsigned* length, char* data)
+{
+   SectorDescriptor sec;
+   FS_STATUS status = SUCCESS;
+   uint8_t secEuIndex;
+   
+   if (filename == NULL || length == NULL || data == NULL)
+   {
+	   return COMMAND_PARAMETERS_ERROR;
+   }
+
+   if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+	
+   if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+   {
+		return FS_IS_BUSY;
+   }
+   
+   do
+   {
+	   //get the file
+	   status = getSectorDescriptor(filename,&sec,&secEuIndex,NULL);
+
+	   if (status != SUCCESS)
+	   {
+		  break;
+	   }
+
+	   //given buffer is to small
+	   if (sec.size > *length)
+	   {
+		   status =  FAILURE;
+		   break;
+	   }
+
+	   
+	   *length = sec.size;
+	   
+	   //read the file's content
+	   if (flash_read(BLOCK_SIZE*secEuIndex + sec.offset,sec.size,(uint8_t*)data) != OPERATION_SUCCESS)
+	   {
+		   status = FAILURE_ACCESSING_FLASH;
+		   break;
+	   }
+	}while(false);
+   
+   tx_mutex_put(&gFsGlobalLock);
+   
+   return status;
+   
+}
+
+
 
 void test()
 {
