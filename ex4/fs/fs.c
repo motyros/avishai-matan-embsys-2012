@@ -24,8 +24,8 @@ typedef enum
 
 //calculate the byte offset of field inside a struct
 #define MY_OFFSET(type, field) ((unsigned long ) &(((type *)0)->field))
-#define READ_LOG_ENTRY(logIndex,entry) (flash_read((logIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
-#define WRITE_LOG_ENTRY(logIndex,entry) (flash_write((logIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
+#define READ_LOG_ENTRY(logIndex,entry) (flash_read((logIndex+1)*FLASH_FLASH_BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
+#define WRITE_LOG_ENTRY(logIndex,entry) (flash_write((logIndex+1)*FLASH_FLASH_BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry))
 
 #pragma pack(1)
 
@@ -185,7 +185,7 @@ static FS_STATUS intstallFileSystem()
         return FAILURE_ACCESSING_FLASH;
     }
 
-	tx_event_flags_get(gFsGlobalEventFlags,1,TX_AND_CLEAR,&acutalFlags,TX_WAIT_FOREVER);
+	tx_event_flags_get(&gFsGlobalEventFlags,1,TX_AND_CLEAR,&acutalFlags,TX_WAIT_FOREVER);
 	
 	
 	//2. write each EraseUnitHeader + update the data structure of the EU's logical metadata.
@@ -196,14 +196,14 @@ static FS_STATUS intstallFileSystem()
 		if (i > 0)
 		{
 			header.metadata.bits.type = DATA;
-            gEUList[i].nextFreeOffset = BLOCK_SIZE;
-            gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader);
+            gEUList[i].nextFreeOffset = FLASH_FLASH_BLOCK_SIZE;
+            gEUList[i].bytesFree = FLASH_FLASH_BLOCK_SIZE-sizeof(EraseUnitHeader);
 		}
         else
         {
             header.metadata.bits.type = LOG;
-            gEUList[i].nextFreeOffset = BLOCK_SIZE - sizeof(LogEntry); //make room for one log entry at the end of the block
-            gEUList[i].bytesFree = BLOCK_SIZE-sizeof(EraseUnitHeader) - sizeof(LogEntry);
+            gEUList[i].nextFreeOffset = FLASH_BLOCK_SIZE - sizeof(LogEntry); //make room for one log entry at the end of the block
+            gEUList[i].bytesFree = FLASH_BLOCK_SIZE-sizeof(EraseUnitHeader) - sizeof(LogEntry);
         }
         
 		if (flash_write(euAddress,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
@@ -225,7 +225,7 @@ static FS_STATUS intstallFileSystem()
 		gEUList[i].totalDescriptors = 0;
 		gEUList[i].deleteFilesTotalSize = 0;
 		gEUList[i].metadata = header.metadata;
-		euAddress+=BLOCK_SIZE;
+		euAddress+=FLASH_BLOCK_SIZE;
 	}
 	
 	gLogIndex = 0;
@@ -241,7 +241,7 @@ static FS_STATUS intstallFileSystem()
  */
 static FS_STATUS ParseEraseUnitContent(uint16_t i)
 {
-   uint16_t baseAddress = i*BLOCK_SIZE,secDescOffset = sizeof(EraseUnitHeader);
+   uint16_t baseAddress = i*FLASH_BLOCK_SIZE,secDescOffset = sizeof(EraseUnitHeader);
 
    SectorDescriptor sd;
 
@@ -274,7 +274,7 @@ static FS_STATUS ParseEraseUnitContent(uint16_t i)
         secDescOffset += sizeof(SectorDescriptor);
 
 
-    }while(!sd.metadata.bits.lastDesc && secDescOffset+sizeof(SectorDescriptor) <= BLOCK_SIZE);
+    }while(!sd.metadata.bits.lastDesc && secDescOffset+sizeof(SectorDescriptor) <= FLASH_BLOCK_SIZE);
 
     gEUList[i].bytesFree -= sizeof(SectorDescriptor)*gEUList[i].totalDescriptors;
 
@@ -448,14 +448,14 @@ static FS_STATUS loadFilesystem()
 				break;
 			}
             corruptedEUIndex = i;
-			euAddress+=BLOCK_SIZE;
+			euAddress+=FLASH_BLOCK_SIZE;
 			continue;
 		}
       
 		gEUList[i].eraseNumber = header.eraseNumber;
 		gEUList[i].metadata.data = header.metadata.data;
-		gEUList[i].bytesFree = BLOCK_SIZE - sizeof(EraseUnitHeader);
-        gEUList[i].nextFreeOffset = BLOCK_SIZE;
+		gEUList[i].bytesFree = FLASH_BLOCK_SIZE - sizeof(EraseUnitHeader);
+        gEUList[i].nextFreeOffset = FLASH_BLOCK_SIZE;
 
 		//if we found valid log
 		if (header.metadata.bits.type == LOG)
@@ -491,7 +491,7 @@ static FS_STATUS loadFilesystem()
 
         
       
-		euAddress+=BLOCK_SIZE;
+		euAddress+=FLASH_BLOCK_SIZE;
 	}
 
    //if no log found, or corrupted fs, create one
@@ -565,10 +565,10 @@ static FS_STATUS writeFile(const char* filename, unsigned length, const char* da
     EraseUnitHeader header;
 
     //calculate the absolute address of the next free secotr descriptor
-    uint16_t sectorDescAddr = BLOCK_SIZE*euIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*gEUList[euIndex].totalDescriptors;
+    uint16_t sectorDescAddr = FLASH_BLOCK_SIZE*euIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*gEUList[euIndex].totalDescriptors;
 
     //calculate the absolute address of the file's content to be written
-    uint16_t dataAddr = BLOCK_SIZE*euIndex + gEUList[euIndex].nextFreeOffset - length;
+    uint16_t dataAddr = FLASH_BLOCK_SIZE*euIndex + gEUList[euIndex].nextFreeOffset - length;
 
     memset(&desc,0xFF,sizeof(SectorDescriptor));
 
@@ -588,7 +588,7 @@ static FS_STATUS writeFile(const char* filename, unsigned length, const char* da
 	    memset(&header,0xFF,sizeof(EraseUnitHeader));
 	    header.metadata.bits.emptyEU = 0;
 
-	    if (flash_write(BLOCK_SIZE*euIndex,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+	    if (flash_write(FLASH_BLOCK_SIZE*euIndex,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
         {
             return FAILURE_ACCESSING_FLASH;
         }
@@ -699,13 +699,13 @@ static bool findEraseUnitToCompact(uint8_t* euIndex,unsigned size)
  static FS_STATUS CopyDataInsideFlash(uint16_t srcAddr,uint16_t srcSize,uint16_t destAddr)
  {
      uint16_t bytesToRead;
-     uint8_t data[BYTES_PER_TRANSACTION];
+     uint8_t data[FLASH_BYTES_PER_TRANSACTION];
      FS_STATUS status = SUCCESS;
 
-     //sinec the flash can read/write in BYTES_PER_TRANSACTION chuncks, do it this size
+     //sinec the flash can read/write in FLASH_BYTES_PER_TRANSACTION chuncks, do it this size
      while (srcSize > 0)
      {
-         bytesToRead = (srcSize > BYTES_PER_TRANSACTION)?BYTES_PER_TRANSACTION:srcSize;
+         bytesToRead = (srcSize > FLASH_BYTES_PER_TRANSACTION)?FLASH_BYTES_PER_TRANSACTION:srcSize;
 
          if (flash_read(srcAddr,bytesToRead,data) != SUCCESS)
          {
@@ -751,7 +751,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 		{
 			return FAILURE_ACCESSING_FLASH;
 		}
-		//flash_write((gLogIndex+1)*BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry);
+		//flash_write((gLogIndex+1)*FLASH_BLOCK_SIZE - sizeof(LogEntry),sizeof(LogEntry),(uint8_t*)&entry);
     }
 
     //mark the entry as valid if needed
@@ -781,14 +781,14 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
             gEUList[gLogIndex].metadata.bits.emptyEU = 0;
         }
 
-    	if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+    	if (flash_write(gLogIndex*FLASH_BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
     	{
 			return FAILURE_ACCESSING_FLASH;
 		}
 
         //set initial addres and offset
-        secDescAddr = gLogIndex*BLOCK_SIZE + sizeof(EraseUnitHeader);
-        dataOffset = BLOCK_SIZE - sizeof(LogEntry);
+        secDescAddr = gLogIndex*FLASH_BLOCK_SIZE + sizeof(EraseUnitHeader);
+        dataOffset = FLASH_BLOCK_SIZE - sizeof(LogEntry);
 
         //start to copy files
         for(i = 0 ; i < gEUList[euIndex].validDescriptors ; ++i)
@@ -798,7 +798,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
             dataOffset -= sec.size;
 
             //copy the file's conent to the new block
-            if ((status = CopyDataInsideFlash(BLOCK_SIZE*euIndex + sec.offset,sec.size,BLOCK_SIZE*gLogIndex + dataOffset)) != SUCCESS)
+            if ((status = CopyDataInsideFlash(FLASH_BLOCK_SIZE*euIndex + sec.offset,sec.size,FLASH_BLOCK_SIZE*gLogIndex + dataOffset)) != SUCCESS)
 			{
 				return status;;
 			}
@@ -817,7 +817,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 
         //set copy complete
         entry.bits.copyComplete = 0;
-        if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != SUCCESS)
+        if (flash_write(gLogIndex*FLASH_BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != SUCCESS)
 		{
 			return FAILURE_ACCESSING_FLASH;
 		}
@@ -826,7 +826,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
     //erase the block if need to
     if (entry.bits.eraseComplete == 1)
     {
-        if (flash_block_erase_start(BLOCK_SIZE*euIndex) != OPERATION_SUCCESS)
+        if (flash_block_erase_start(FLASH_BLOCK_SIZE*euIndex) != OPERATION_SUCCESS)
 		{
 			return FAILURE_ACCESSING_FLASH;
 		}
@@ -836,7 +836,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
         //set erase complete
         entry.bits.eraseComplete = 0;
         
-		if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+		if (flash_write(gLogIndex*FLASH_BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
 		{
 			return FAILURE_ACCESSING_FLASH;
 		}
@@ -851,7 +851,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
     header.metadata.bits.type = LOG;
     header.metadata.bits.valid = 0;
 
-    if (flash_write(euIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+    if (flash_write(euIndex*FLASH_BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
 	{
 		return FAILURE_ACCESSING_FLASH;
 	}
@@ -861,7 +861,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
     memset(&header,0xFF,sizeof(EraseUnitHeader));
     header.metadata.bits.type = DATA;
     
-	if (flash_write(gLogIndex*BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
+	if (flash_write(gLogIndex*FLASH_BLOCK_SIZE,sizeof(EraseUnitHeader),(uint8_t*)&header) != OPERATION_SUCCESS)
 	{
 		return FAILURE_ACCESSING_FLASH;
 	}
@@ -896,7 +896,7 @@ static FS_STATUS CompactBlock(uint8_t euIndex,LogEntry entry)
 static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pNextActualSectorIndex,SectorDescriptor* pSecDesc)
 {
 
-   uint16_t baseAddress = BLOCK_SIZE*euIndex,secDescOffset = sizeof(EraseUnitHeader) ,sectorIndexInc = 0;
+   uint16_t baseAddress = FLASH_BLOCK_SIZE*euIndex,secDescOffset = sizeof(EraseUnitHeader) ,sectorIndexInc = 0;
    
    //advance the index if we got relevant value value
    if (pNextActualSectorIndex != NULL && *pNextActualSectorIndex > 0)
@@ -910,7 +910,7 @@ static FS_STATUS getNextValidSectorDescriptor(uint8_t euIndex,uint16_t* pNextAct
       flash_read(baseAddress + secDescOffset,sizeof(SectorDescriptor),(uint8_t*)pSecDesc);
       secDescOffset+=sizeof(SectorDescriptor);
       ++sectorIndexInc;
-   }while(pSecDesc->metadata.bits.validDesc != 0 || pSecDesc->metadata.bits.obsoleteDes == 0 && secDescOffset + sizeof(SectorDescriptor) < BLOCK_SIZE);
+   }while(pSecDesc->metadata.bits.validDesc != 0 || pSecDesc->metadata.bits.obsoleteDes == 0 && secDescOffset + sizeof(SectorDescriptor) < FLASH_BLOCK_SIZE);
 
    //cancle last increment, since we want the actual index of the current file and not the next
    --sectorIndexInc;
@@ -1016,7 +1016,7 @@ static FS_STATUS eraseFileFromFS(const char* filename)
    //mark the file as obsolete and write it to the flash
    sec.metadata.bits.obsoleteDes = 0;
 
-   if (flash_write(BLOCK_SIZE*secEuIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*actualSecIndex,sizeof(SectorDescriptor),(uint8_t*)&sec) != OPERATION_SUCCESS)
+   if (flash_write(FLASH_BLOCK_SIZE*secEuIndex + sizeof(EraseUnitHeader) + sizeof(SectorDescriptor)*actualSecIndex,sizeof(SectorDescriptor),(uint8_t*)&sec) != OPERATION_SUCCESS)
    {
 	   return FAILURE_ACCESSING_FLASH;
    }
@@ -1184,7 +1184,7 @@ FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
 			beak;
 		}
 
-		if (flash_read(BLOCK_SIZE*euIdx + desc.offset,desc.size,(uint8_t*)data) != OPERATION_SUCCESS)
+		if (flash_read(FLASH_BLOCK_SIZE*euIdx + desc.offset,desc.size,(uint8_t*)data) != OPERATION_SUCCESS)
 		{
 			status =  FAILURE_ACCESSING_FLASH;
 			break;
@@ -1374,7 +1374,7 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data)
 	   *length = sec.size;
 	   
 	   //read the file's content
-	   if (flash_read(BLOCK_SIZE*secEuIndex + sec.offset,sec.size,(uint8_t*)data) != OPERATION_SUCCESS)
+	   if (flash_read(FLASH_BLOCK_SIZE*secEuIndex + sec.offset,sec.size,(uint8_t*)data) != OPERATION_SUCCESS)
 	   {
 		   status = FAILURE_ACCESSING_FLASH;
 		   break;
