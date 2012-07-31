@@ -28,7 +28,7 @@ a.out: main.o flash.o input_panel.o LCD.o network.o timer.o ivt.o device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map
 
 tar:
-	tar -cvf avishl02_matanp01 flash.* input_panel.* LCD.* network.* timer.* ivt.s README makefile
+	tar -cvf avishl02_matanp01 flash.* input_panel.* LCD.* network.* timer.* ivt.s common_defs.h our_common_defs.h README makefile
 
 clean: 
 	rm -f avishl02_matanp01 ex2.a *.o
