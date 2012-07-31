@@ -8,7 +8,7 @@
 #ifndef TIMER_H_
 #define TIMER_H_
 
-#include "../common_defs.h"
+#include "./common_defs.h"
 
 /**********************************************************************
  *

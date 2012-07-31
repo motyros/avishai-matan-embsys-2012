@@ -11,9 +11,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifndef NULL
-#define NULL 0x0
-#endif
 // Return values of external functions.
 typedef enum
 {
@@ -26,10 +23,5 @@ typedef enum
 
 } result_t;
 
-#ifdef DBG
-#define DBG_ASSERT(cond) if (!(cond)) _ASM("BRK_S"); _nop(); _nop();
-#else
-#define DBG_ASSERT(cond)
-#endif
 
 #endif /* COMMON_DEFS_H_ */

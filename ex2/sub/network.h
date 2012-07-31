@@ -8,7 +8,7 @@
 #ifndef NETWORK_H_
 #define NETWORK_H_
 
-#include "../common_defs.h"
+#include "./common_defs.h"
 
 // The maximum unit's size that can be transmitted over the network (send & receive)
 #define NETWORK_MAXIMUM_TRANSMISSION_UNIT 161
@@ -83,7 +83,7 @@ typedef  void (*network_transmit_error_cb)(transmit_error_reason_t,
 
 typedef struct
 {
-	network_packet_transmitted_cb	transmitted_cb;
+	network_packet_transmitted_cb	        transmitted_cb;
 	network_packet_received_cb		recieved_cb;
 	network_packet_dropped_cb		dropped_cb;
 	network_transmit_error_cb		transmit_error_cb;

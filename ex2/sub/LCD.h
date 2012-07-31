@@ -8,7 +8,7 @@
 #ifndef LCD_H_
 #define LCD_H_
 
-#include "../common_defs.h"
+#include "./common_defs.h"
 
 // Maximum number of character that find on a line
 #define LCD_LINE_LENGTH 12

@@ -9,7 +9,7 @@
 #ifndef FLASH_H_
 #define FLASH_H_
 
-#include "../common_defs.h"
+#include "./common_defs.h"
 
 // Maximum size of data buffer that can be used.
 #define MAX_REQUEST_BUFFER_SIZE 512

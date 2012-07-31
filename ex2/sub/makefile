@@ -1,18 +1,18 @@
 all: ex2.a
 
-flash.o: flash/flash.c flash/flash.h common_defs.h
+flash.o: flash.c flash.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-input_panel.o: input_panel/input_panel.c input_panel/input_panel.h common_defs.h
+input_panel.o: input_panel.c input_panel.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
 	
-LCD.o: LCD/LCD.c LCD/LCD.h common_defs.h
+LCD.o: LCD.c LCD.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-network.o: network/network.c network/network.h common_defs.h
+network.o: network.c network.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@	
 
-timer.o: timer/timer.c timer/timer.h common_defs.h
+timer.o: timer.c timer.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
 
 ivt.o: ivt.s
@@ -28,7 +28,7 @@ a.out: main.o flash.o input_panel.o LCD.o network.o timer.o ivt.o device.svr3
 	mcc -a6 $+ -o $@ -Hldopt=-m -Hldopt=-C,output=device.map
 
 tar:
-	tar --exclude=".*" -cvjf avishl02_matanp01 flash input_panel LCD network timer ivt.s common_defs.h README makefile
+	tar -cvf avishl02_matanp01 flash.* input_panel.* LCD.* network.* timer.* ivt.s README makefile
 
 clean: 
 	rm -f avishl02_matanp01 ex2.a *.o
