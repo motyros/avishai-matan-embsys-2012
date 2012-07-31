@@ -1,6 +1,5 @@
 #include "input_panel.h"
-#include "common_defs.h"
-#include "dbg_assert.h"
+#include "our_common_defs.h"
 
 #define INPUT_PANEL_PADSTAT_ADDR 0x1E0
 #define INPUT_PANEL_PADIER_ADDR 0x1E1

@@ -1,6 +1,6 @@
 #include "LCD.h"
 #include "common_defs.h"
-#include "dbg_assert.h"
+#include "our_common_defs.h"
 
 #define LCD_DBUF_ADDR 0x1F0
 #define LCD_DCMD_ADDR 0x1F1

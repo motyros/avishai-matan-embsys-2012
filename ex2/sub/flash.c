@@ -1,10 +1,6 @@
 #include "flash.h"
 #include "common_defs.h"
-#include "dbg_assert.h"
-
-#ifndef NULL
-#define NULL 0x0
-#endif
+#include "our_common_defs.h"
 
 #define FLASH_CAPACITY (64*1024)
 #define FLASH_BLOCK_SIZE (4*1024)

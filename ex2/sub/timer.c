@@ -1,6 +1,6 @@
 #include "timer.h"
 #include "common_defs.h"
-#include "dbg_assert.h"
+#include "our_common_defs.h"
 
 #define TIMER0_COUNT_ADDR	0x21
 #define TIMER0_CONTROL_ADDR	0x22

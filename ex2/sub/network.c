@@ -1,5 +1,5 @@
 #include "network.h"
-#include "dbg_assert.h"
+#include "our_common_defs.h"
 
 #define NETWORK_BASE_ADDR 0x200000
 
