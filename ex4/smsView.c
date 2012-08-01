@@ -543,4 +543,3 @@ bool viewIsLastRowSelected()
 	return (gSelectedLineIndex+1 == modelGetSmsDbSize())|| (gSelectedLineIndex+1==(SCREEN_HEIGHT-1));
 }
 
-
