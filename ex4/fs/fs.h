@@ -88,7 +88,7 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data);
 
 
 */
-FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data);
+//FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data);
 
 FS_STATUS fs_get_filename_by_index(unsigned index,unsigned* length, char* name);
 
