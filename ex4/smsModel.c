@@ -535,4 +535,3 @@ TX_STATUS modelReleaseLock()
 {
 	return tx_mutex_put(&gModelMutex);
 }
-
