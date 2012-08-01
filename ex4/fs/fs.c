@@ -513,8 +513,11 @@ static FS_STATUS loadFilesystem()
 
 static void flash_data_recieve_cb(uint8_t const *buffer, uint32_t size)
 {
-	(buffer);
-	(size);
+    if (buffer == NULL || size == 0)
+    {
+        DBG_ASSERT(false);
+    }
+    
 	DBG_ASSERT(false);
 }
 
@@ -1205,7 +1208,9 @@ FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
 FS_STATUS fs_init(const FS_SETTINGS settings)
 {
    
-   (settings);
+    if (settings.block_count == 0)
+    {
+    }
    
    if (tx_event_flags_create(&gFsGlobalEventFlags,"fs global event flags") != TX_SUCCESS)
    {
@@ -1457,7 +1462,7 @@ void test()
    fs_list(&filenamesSize,filenames);
    
    
-   /*
+   
    LogEntry e = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
    int a = sizeof(LogEntry);
 
@@ -1469,6 +1474,7 @@ void test()
    e.moveBlock.bits1.valid = 0;
    e.moveBlock.bits2.euFromIndex = 0;
    e.moveBlock.bits2.euToIndex = 0;
-   */
+   
 
-//}
+}
+*/

@@ -16,7 +16,7 @@
 
 #define FLASH_CAPACITY (64*1024)
 #define FLASH_BLOCK_SIZE (4*1024)
-
+#define FLASH_BYTES_PER_TRANSACTION (63)
 /**********************************************************************
  *
  * Function:    flash_init

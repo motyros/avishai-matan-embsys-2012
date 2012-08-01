@@ -5,6 +5,7 @@
 //#include "smsView.h"
 #include "timer/timer.h"
 #include "flash/flash.h"
+#include <string.h>
 
 char gThreadStack[1024];
 TX_THREAD gThread;
@@ -12,20 +13,20 @@ TX_THREAD gThread;
 
 void threadMainLoopFunc(ULONG v)
 {
-	char str[64];
+	uint8_t str[64];
 	int i;
-	
+        result_t fStatus;
 	for(i = 0 ; i < 63 ; ++i)
 	{
 		str[i] = 'a';
 	}
 	str[i] = 'b';
 	
-	fStatus = flash_write(0,64,str);
+	fStatus = flash_write(1024*64-1,1,str);
 	
 	memset(str,0x00,64);
 	
-	fStatus = flash_read(0,64,str);
+	fStatus = flash_read(1024*64-1,1,str);
 	
 	i = 5;
 	i++;
@@ -61,16 +62,18 @@ void tx_application_define(void *first)
 	//set initial values to the timer tx using
 	fStatus = flash_init(flash_data_recieve_cb,flash_request_done_cb);
 	
+        
+
 	status = tx_thread_create(	&gThread,
-							"Thread",
-							guiThreadMainLoopFunc,
-							0,
-							threadMainLoopFunc,
-							gThreadStack,
-							0,//GUI_THREAD_PRIORITY,
-							0,//GUI_THREAD_PRIORITY,
-							TX_NO_TIME_SLICE, TX_AUTO_START
-							);
+					"Thread",
+					threadMainLoopFunc,
+					0,
+					gThreadStack,
+                                        1024,
+					0,//GUI_THREAD_PRIORITY,
+					0,//GUI_THREAD_PRIORITY,
+					TX_NO_TIME_SLICE, TX_AUTO_START
+					);
 
 	timer_arm_tx_timer(TX_TICK_MS);
 
