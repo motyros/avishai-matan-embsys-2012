@@ -16,12 +16,12 @@ void threadMainLoopFunc(ULONG v)
 	uint8_t str[64];
 	int i;
         result_t fStatus;
-	for(i = 0 ; i < 63 ; ++i)
+	for(i = 0 ; i < 1 ; ++i)
 	{
 		str[i] = 'a';
 	}
 	str[i] = 'b';
-	
+	fStatus = flash_bulk_erase_start();
 	fStatus = flash_write(1024*64-1,1,str);
 	
 	memset(str,0x00,64);
