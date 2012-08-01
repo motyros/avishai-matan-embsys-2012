@@ -419,7 +419,7 @@ void renderMessageDisplayScreen()
 			SMS_DELIVER inMsg;
 			SMS_DELIVER* pInMsg = &inMsg;
 			length = sizeof(SMS_DELIVER);
-			modelGetSmsByFileName((uint_8)pMessage->fileName, &length, (char*)pInMsg);
+			modelGetSmsByFileName((uint8_t*)pMessage->fileName, &length, (char*)pInMsg);
 
 			//set time stamp
 			setTimeFromTimeStamp(line,pInMsg->timestamp);
@@ -449,10 +449,10 @@ void renderMessageDisplayScreen()
 			lcd_set_row_without_flush(1,false,line,SCREEN_WIDTH);
 
 			//SMS_SUBMIT* pOutMsg = (SMS_SUBMIT*)pMessage->pSMS;
-			SMS_DELIVER outMsg;
-			SMS_DELIVER* pOutMsg = &outMsg;
+			SMS_SUBMIT outMsg;
+			SMS_SUBMIT* pOutMsg = &outMsg;
 			length = sizeof(SMS_SUBMIT);
-			modelGetSmsByFileName((uint_8)pMessage->fileName, &length, (char*)pOutMsg);
+			modelGetSmsByFileName((uint8_t*)pMessage->fileName, &length, (char*)pOutMsg);
 
 
 			dataLength =pOutMsg->data_length;

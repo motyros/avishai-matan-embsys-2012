@@ -43,7 +43,10 @@ main.o: main.c TX/tx_api.h common_defs.h flash/flash.h fs/fs.h timer/timer.h
 a_orig.out: main.o input_panel.o LCD.o network.o timer.o smsModel.o smsView.o smsController.o embsys_sms_protocol_mine.o ivt.o device.svr3
 	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
 
-a.out: main.o timer.o flash.o fs.o input_panel.o LCD.o network.o ivt.o device.svr3
+a.out: main.o timer.o flash.o fs.o input_panel.o LCD.o network.o device.svr3 smsView.o smsModel.o smsController.o embsys_sms_protocol_mine.o ivt.o
+	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
+
+a_matan.out: main.o timer.o flash.o fs.o input_panel.o LCD.o network.o device.svr3 smsView.o smsModel.o smsController.o embsys_sms_protocol_mine.o ivt.o
 	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
 
 dump:

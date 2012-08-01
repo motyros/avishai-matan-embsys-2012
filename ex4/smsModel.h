@@ -47,7 +47,7 @@ struct SmsLinkNode
         SmsLinkNodePtr  pPrev;
         message_type    type;
 		char title[ID_MAX_LENGTH];
-		uint_8 fileName[SMS_FILE_NAME_LENGTH];
+		uint8_t fileName[SMS_FILE_NAME_LENGTH];
 };
 
 /*
@@ -65,7 +65,7 @@ UINT modelInit();
 			 when the function return this argument will hold the file size, i.e. the actual used space size of the 'data' buffer.
 	data - a pointer for a buffer to hold the file content.
 */
-UINT modelGetSmsByFileName(const uint_8* fileName, unsigned* smsSize, char* data);
+UINT modelGetSmsByFileName(const uint8_t* fileName, unsigned* smsSize, char* data);
 
 /*
  * get the enum of the current been displayed screen

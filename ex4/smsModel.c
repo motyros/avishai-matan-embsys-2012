@@ -1,6 +1,6 @@
 #include "smsModel.h"
 #include "embsys_sms_protocol_mine.h"
-#include "fs.h"
+#include "fs/fs.h"
 
 
 #define SMS_BLOCK_SIZE (sizeof(SMS_DELIVER))
@@ -25,7 +25,7 @@ typedef struct
 }SmsLinkedList;
 
 //cunter for the file names
-uint_8 gFileCunter;
+uint8_t gFileCunter;
 
 //the sms linked list data-base
 SmsLinkedList gSmsDb;
@@ -58,6 +58,11 @@ TX_BLOCK_POOL gSmsLinkListPool;
 TX_MUTEX gModelMutex;
 
 FS_STATUS fillLinkedList(unsigned fileCount);
+FS_STATUS fillSmsNodeFields(uint8_t* fileName, const message_type type, SmsLinkNodePtr pNewSms,char* pSms);
+void addSmsToLinkedList(SmsLinkNodePtr pNewSms);
+
+
+
 
 UINT modelInit()
 {
@@ -88,11 +93,12 @@ UINT modelInit()
 	memset(&gInEditSms,0,sizeof(SMS_SUBMIT));
 
 	unsigned fileCount = 0;
-	FS_STATUS fsStatus = fs_count(&file_count);
+	FS_STATUS fsStatus = fs_count(&fileCount);
 
 	if(fsStatus != SUCCESS)
 	{
-		return fsStatus;?
+		//TODO what to return?
+		return fsStatus;
 	}
 
 	//init the list to empty
@@ -109,11 +115,12 @@ UINT modelInit()
 	//else the file system not empty
 	fsStatus = fillLinkedList(fileCount);
 
-	return fsStatus;?
+	//TODO what to return?
+	return fsStatus;
 
 }
 
-FS_STATUS createAndAddSmsLinkNodeToDB(uint_8* fileName, const message_type type, char* data)
+FS_STATUS createAndAddSmsLinkNodeToDB(uint8_t* fileName, const message_type type, char* data)
 {
 	FS_STATUS fsStatus;
 	UINT txStatus;
@@ -136,20 +143,21 @@ FS_STATUS fillLinkedList(unsigned fileCount)
 	unsigned i;
 	unsigned smsSize = SMS_BLOCK_SIZE;
 	char data[SMS_BLOCK_SIZE];
-	uint_8 fileName[SMS_FILE_NAME_LENGTH] = {0};
+	uint8_t fileName[SMS_FILE_NAME_LENGTH] = {0};
+	unsigned fileNameLength = SMS_FILE_NAME_LENGTH;
 	//read all files
 	for ( i = 0 ; i < fileCount ; ++i )
 	{
-		//read the file by index
-		fsStatus = fs_read_by_index( i, &smsSize, (char*)data);
+		//get the file name
+		fsStatus = fs_get_filename_by_index(i, &fileNameLength,(char*) fileName);
+		//in case there is problems with the filename, continue to the next file
+		if(fsStatus != SUCCESS) continue;
 
+		//read the file by it's name
+		fsStatus = fs_read((char*)fileName,&smsSize,(char*)data);
 		//in case there is problems with the file, continue to the next file
 		if(fsStatus != SUCCESS) continue;
 
-		//get it's name
-		fsStatus = fs_get_filename_by_index(i, (char*) fileName);
-		//in case there is problems with the filename, continue to the next file
-		if(fsStatus != SUCCESS) continue;
 
 		//add the sms acording to the data
 		if(smsSize == sizeof(SMS_DELIVER))
@@ -158,7 +166,7 @@ FS_STATUS fillLinkedList(unsigned fileCount)
 		}
 		else if(smsSize == sizeof(SMS_SUBMIT))
 		{
-			fsStatus = createAndAddSmsLinkNodeToDB(fileName, OUTGOING_MESSAGE, (char*)data);, 
+			fsStatus = createAndAddSmsLinkNodeToDB(fileName, OUTGOING_MESSAGE, (char*)data);
 		}
 		else
 		{
@@ -169,10 +177,11 @@ FS_STATUS fillLinkedList(unsigned fileCount)
 	return fsStatus;
 }
 
-UINT modelGetSmsByFileName(const uint_8* fileName, unsigned* smsSize, char* data)
+UINT modelGetSmsByFileName(const uint8_t* fileName, unsigned* smsSize, char* data)
 {
-	FS_STATUS status = fs_read(fileName, &smsSize, data);
-	if(status != SUCCESS) return TX_NO_INSTANCE;?
+	FS_STATUS status = fs_read((char*)fileName, smsSize, data);
+	//TODO what to return?
+	if(status != SUCCESS) return TX_NO_INSTANCE;
 	return TX_SUCCESS;
 }
 
@@ -217,22 +226,22 @@ void updateHeadAndTailCyclic()
 }
 
 
-uint_8 findFileName()
+uint8_t findFileName()
 {
-	uint_8 fileName;
-	int tempDataLength = 1;
+	uint8_t fileName[SMS_FILE_NAME_LENGTH] = {0};
+	unsigned tempDataLength = 1;
 	char tempData[1];
 	FS_STATUS sta;
 	do
 	{
 		//get the next name
-		fileName = (uint_8)(gFileCunter%MAX_NUM_SMS);//[FILE_NAME_LENGTH];
+		fileName[0] = (uint8_t)(gFileCunter%MAX_NUM_SMS);//[FILE_NAME_LENGTH];
 		//check if the name is available
-		sta = fs_read(&fileName, &tempDataLength, (char*)tempData);
+		sta = fs_read((char*)fileName, &tempDataLength, (char*)tempData);
 		gFileCunter++;
 	}while(sta != FILE_NOT_FOUND);//sta == SUCCESS
 
-	return fileName;
+	return fileName[0];
 
 }
 
@@ -251,7 +260,7 @@ FS_STATUS fillTitle(const message_type type, SmsLinkNodePtr pNewSms, char* data)
 		//set the title
 		for(i = 0 ; (pInSms->sender_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
 		{
-			*(pNewSms->title)++ = pInSms->sender_id[i];
+			pNewSms->title[i] = pInSms->sender_id[i];
 		}
 		return SUCCESS;
 
@@ -261,7 +270,7 @@ FS_STATUS fillTitle(const message_type type, SmsLinkNodePtr pNewSms, char* data)
 		//set the title
 		for(i = 0 ; (pOutSms->recipient_id[i] != (char)NULL) && (i < ID_MAX_LENGTH) ; ++i)
 		{
-			*(pNewSms->title)++ = pOutSms->recipient_id[i];
+			pNewSms->title[i] = pOutSms->recipient_id[i];
 		}
 		return SUCCESS;
 	}
@@ -276,17 +285,17 @@ FS_STATUS writeSmsToFileSystem(const message_type type, SmsLinkNodePtr pNewSms, 
 	{
 	case INCOMMING_MESSAGE:
 		//add the sms-deliver to the file system
-		return fs_write(pNewSms->fileName, sizeof(SMS_DELIVER), data);
+		return fs_write((char*)pNewSms->fileName, sizeof(SMS_DELIVER), data);
 
 	case OUTGOING_MESSAGE:
 		//add the sms-submit to the file system
-		return fs_write(pNewSms->fileName, sizeof(SMS_SUBMIT), data);
+		return fs_write((char*)pNewSms->fileName, sizeof(SMS_SUBMIT), data);
 
 	}
 	return COMMAND_PARAMETERS_ERROR;
 }
 
-void addSmsToLinkedList(SmsLinkNodePtr pNewSms);
+void addSmsToLinkedList(SmsLinkNodePtr pNewSms)
 {
 	DBG_ASSERT( pNewSms != NULL);
 	//in case the list is empty
@@ -343,7 +352,7 @@ UINT allocateMemInPool(SmsLinkNodePtr pNewSms)
 	*/
 }
 
-FS_STATUS fillSmsNodeFields(uint_8* fileName, const message_type type, SmsLinkNodePtr pNewSms,char* pSms)
+FS_STATUS fillSmsNodeFields(uint8_t* fileName, const message_type type, SmsLinkNodePtr pNewSms,char* pSms)
 {
 	DBG_ASSERT(pNewSms != NULL);
 	FS_STATUS fsStatus = fillTitle(type, pNewSms, pSms);
@@ -368,11 +377,12 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 	SmsLinkNodePtr pNewSms;
 	UINT txStatus = allocateMemInPool(pNewSms);
 
-	if(txStatus != TX_SUCCESS) return txStatus
+	if(txStatus != TX_SUCCESS) return txStatus;
 
 	FS_STATUS fsStatus;
 
-	uint_8 fileName = findFileName();
+	uint8_t fileName[SMS_FILE_NAME_LENGTH] = {0};
+	fileName[0] = findFileName();
 
 	fsStatus = fillSmsNodeFields(fileName, type, pNewSms,(char*)pSms);
 
@@ -383,7 +393,8 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 	//copy the given sms to the allocated memory
 	//        memcpy(pNewSms->pSMS,pSms,SMS_BLOCK_SIZE);
 
-	return fsStatus;?
+	//TODO what to return?
+	return fsStatus;
 }
 
 TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
@@ -402,7 +413,7 @@ TX_STATUS modelRemoveSmsFromDb(const SmsLinkNodePtr pSms)
 	}
 
 	//erase the sms from the file system
-	status = fs_erase(pSms->fileName);
+	status = fs_erase((char*)pSms->fileName);
 
 	//if the node is the last node in the list, so the node is 
 	//the head and the tail of the list.
