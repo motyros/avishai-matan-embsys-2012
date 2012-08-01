@@ -23,7 +23,7 @@ void threadMainLoopFunc(ULONG v)
 	
 	settings.block_count = 16;
 	status = fs_init(settings);
-	status = fs_write("file1",5,"abcde");
+	//status = fs_write("file1",5,"abcde");
 	status = fs_read("file1",&len,data);
 	
 	status = SUCCESS;

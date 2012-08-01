@@ -1135,6 +1135,7 @@ FS_STATUS fs_list(unsigned* length, char* files)
    return status;
 }
 
+/*
 FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
 {
     SectorDescriptor desc;
@@ -1199,8 +1200,72 @@ FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
     return status;
 
 }
+*/
+FS_STATUS fs_get_filename_by_index(unsigned index,unsigned* length, char* name)
+{
+	SectorDescriptor desc;
+	uint16_t actualSecDesc;
+	uint8_t euIdx = 0,i,fileNameLen = 0;
+	FS_STATUS status = SUCCESS;
 
 
+	if (!gFsIsReady)
+	{
+		return FS_NOT_READY;
+	}
+
+
+
+	//take lock
+	if (tx_mutex_get(&gFsGlobalLock,TX_NO_WAIT) != TX_SUCCESS)
+	{
+		return FS_IS_BUSY;
+	}
+
+	do
+	{
+		if (index >= gFilesCount)
+		{
+			status = FILE_NOT_FOUND;
+			break;
+		}
+
+		while (index >= gEUList[euIdx].validDescriptors)
+		{
+			index-=gEUList[euIdx].validDescriptors;
+			++euIdx;
+		}
+
+		actualSecDesc = 0;
+
+		for(i = 0 ; i <= index ; ++i)
+		{
+			if ((status = getNextValidSectorDescriptor(euIdx,&actualSecDesc,&desc)) != SUCCESS)
+			{
+				break;
+			}
+		}
+
+		while(fileNameLen < FILE_NAME_MAX_LEN && desc.fileName[fileNameLen] != '\0')
+		{
+			++fileNameLen;
+		}
+
+		if (fileNameLen < *length)
+		{
+			status = FAILURE;
+		}
+
+		memcpy(name,desc.fileName,fileNameLen);
+
+		*length = fileNameLen;
+
+	}while(false);
+
+	tx_mutex_put(&gFsGlobalLock);
+
+	return status;
+}
 
 FS_STATUS fs_init(const FS_SETTINGS settings)
 {
