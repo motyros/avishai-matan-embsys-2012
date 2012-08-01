@@ -5,7 +5,7 @@
 -a6
 -toggle=deadbeef=1
 -Xtimer0
--simextp=/cs/course/current/embsys/www/embsys_pager.so,ROM=2,RAM=1
+-simextp=/cs/course/current/embsys/www/embsys_pager.so,RAM=1
 -simextp=/cs/course/current/embsys/www/embsys_flash.so,size=16
 -simextp=/cs/course/current/embsys/www/embsys_uart.so
 -simextp=/cs/course/current/embsys/www/embsys_halt.so
