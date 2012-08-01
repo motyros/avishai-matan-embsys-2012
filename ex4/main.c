@@ -5,43 +5,43 @@
 //#include "smsView.h"
 #include "timer/timer.h"
 #include "flash/flash.h"
+#include "fs/fs.h"
 #include <string.h>
 
 char gThreadStack[1024];
 TX_THREAD gThread;
 
+bool gOpDone = false;
 
 void threadMainLoopFunc(ULONG v)
 {
-	uint8_t str[64];
-	int i;
-        result_t fStatus;
-	for(i = 0 ; i < 1 ; ++i)
-	{
-		str[i] = 'a';
-	}
-	str[i] = 'b';
-	fStatus = flash_bulk_erase_start();
-	fStatus = flash_write(1024*64-1,1,str);
+	FS_SETTINGS settings;
+	FS_STATUS status;
+
+	char data[512];
+	unsigned len = 512;
 	
-	memset(str,0x00,64);
+	settings.block_count = 16;
+	status = fs_init(settings);
+	status = fs_write("file1",5,"abcde");
+	status = fs_read("file1",&len,data);
 	
-	fStatus = flash_read(1024*64-1,1,str);
+	status = SUCCESS;
 	
-	i = 5;
-	i++;
 }
 
 static void flash_data_recieve_cb(uint8_t const *buffer, uint32_t size)
 {
 	int a = 0;
 	a = a + 1;
+	gOpDone = true;
 }
 
 static void flash_request_done_cb(void)
 {
 	int a = 0;
 	a = a + 1;
+	gOpDone = true;
 }
 
 //TX will call this function after system init
@@ -60,7 +60,7 @@ void tx_application_define(void *first)
 	//DBG_ASSERT(status == TX_SUCCESS);
 
 	//set initial values to the timer tx using
-	fStatus = flash_init(flash_data_recieve_cb,flash_request_done_cb);
+	//fStatus = flash_init(flash_data_recieve_cb,flash_request_done_cb);
 	
         
 

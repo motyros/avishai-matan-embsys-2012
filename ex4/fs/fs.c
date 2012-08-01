@@ -425,10 +425,7 @@ static FS_STATUS loadFilesystem()
 	
     EraseUnitHeader header;
 
-    //TODO put here some true pointers to cb functions + implementation
-    flash_init(NULL,NULL);
-
-    memset(gEUList,0x00,sizeof(gEUList));
+     memset(gEUList,0x00,sizeof(gEUList));
     gFilesCount = 0;
     //read every EraseUnit header and parse it's SectorDescriptors list
 	for(i = 0 ; i < ERASE_UNITS_NUMBER ; ++i)
@@ -1208,16 +1205,18 @@ FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data)
 FS_STATUS fs_init(const FS_SETTINGS settings)
 {
    
+	TX_STATUS status;
+	FS_STATUS fStatus;
     if (settings.block_count == 0)
     {
     }
    
-   if (tx_event_flags_create(&gFsGlobalEventFlags,"fs global event flags") != TX_SUCCESS)
+   if ((status=tx_event_flags_create(&gFsGlobalEventFlags,"fs global event flags")) != TX_SUCCESS)
    {
 		return FAILURE;
    }
    
-   if (tx_mutex_create(&gFsGlobalLock,"fs global lock",TX_NO_INHERIT) != TX_SUCCESS)
+   if ((status=tx_mutex_create(&gFsGlobalLock,"fs global lock",TX_NO_INHERIT)) != TX_SUCCESS)
    {
 		return FAILURE;
    }
@@ -1227,7 +1226,14 @@ FS_STATUS fs_init(const FS_SETTINGS settings)
 		return FAILURE;
    }
    
-   return loadFilesystem();
+   fStatus = loadFilesystem();
+
+   if (fStatus == SUCCESS)
+   {
+	   gFsIsReady = true;
+   }
+
+   return fStatus;
 }
 
 

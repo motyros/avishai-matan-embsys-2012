@@ -237,6 +237,7 @@ void flashISR()
 result_t flash_init(	void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32_t size),
 						void (*flash_request_done_cb)(void))
 {
+	TX_STATUS status;
 	if (!flash_data_recieve_cb || !flash_request_done_cb)
 	{
 		return NULL_POINTER;
@@ -247,12 +248,12 @@ result_t flash_init(	void (*flash_data_recieve_cb)(uint8_t const *buffer, uint32
 		gpFlashDataReciveCB = flash_data_recieve_cb;
 		gpFlashRequestDoneCB = flash_request_done_cb;
 
-		if (tx_mutex_create(&gFlashGlobalLock,"flash global mutex",TX_NO_INHERIT) != TX_SUCCESS)
+		if ((status=tx_mutex_create(&gFlashGlobalLock,"flash global mutex",TX_NO_INHERIT)) != TX_SUCCESS)
 		{
 			return GENERAL_ERROR;
 		}
 		
-		if (tx_event_flags_create(&gFlashEventFlags,"flash global event flags") != TX_SUCCESS)
+		if ((status=tx_event_flags_create(&gFlashEventFlags,"flash global event flags")) != TX_SUCCESS)
 		{
 			return GENERAL_ERROR;
 		}
@@ -479,12 +480,19 @@ result_t flash_write_start(uint16_t start_address, uint16_t size, const uint8_t 
  */
 void loadDataToRegs(const uint8_t buffer[],const uint16_t size)
 {
-	uint16_t i,regIndex;
-
-	for(i = 0 , regIndex = 0 ; i < size ; i+=4 , ++regIndex)
+	uint16_t i,j,regIndex;
+	uint32_t byte;
+	for(i = 0 , regIndex = 0 ; i < size ; ++regIndex)
 	{
+		byte = 0;
+
+		for(j = 0 ;j < 4 && i < size; ++j,++i)
+		{
+			((uint8_t*)(&byte))[j] = buffer[i];
+		}
+
 		//store 4 bytes from our buffer into each FDATA 32bits registers (4 bytes each)
-		_sr((*(uint32_t*)(buffer+i)),FLASH_FDATA_BASE_ADDR+regIndex);
+		_sr(byte,FLASH_FDATA_BASE_ADDR+regIndex);
 	}
 }
 
