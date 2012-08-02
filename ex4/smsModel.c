@@ -5,7 +5,7 @@
 
 #define SMS_BLOCK_SIZE (sizeof(SMS_DELIVER))
 #define BLOCK_OVERHEAD (sizeof(void*))
-
+#define NUM_OF_FLASH_BLOCK 16
 #define SMS_POOL_REAL_SIZE (MAX_NUM_SMS*(SMS_BLOCK_SIZE+BLOCK_OVERHEAD))
 
 #define SMS_DB_BLOCK_SIZE (sizeof(SmsLinkNode))
@@ -92,13 +92,22 @@ UINT modelInit()
 
 	memset(&gInEditSms,0,sizeof(SMS_SUBMIT));
 
-	unsigned fileCount = 0;
-	FS_STATUS fsStatus = fs_count(&fileCount);
-
+	//init the file system
+	FS_SETTINGS fsSettings;
+	fsSettings.block_count = NUM_OF_FLASH_BLOCK;
+	FS_STATUS fsStatus = fs_init(fsSettings);
 	if(fsStatus != SUCCESS)
 	{
-		//TODO what to return?
-		return fsStatus;
+			//TODO what to return?
+			return fsStatus;
+	}
+
+	unsigned fileCount = 0;
+	fsStatus = fs_count(&fileCount);
+	if(fsStatus != SUCCESS)
+	{
+			//TODO what to return?
+			return fsStatus;
 	}
 
 	//init the list to empty
