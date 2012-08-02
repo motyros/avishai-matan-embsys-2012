@@ -135,7 +135,7 @@ FS_STATUS createAndAddSmsLinkNodeToDB(uint8_t* fileName, const message_type type
 	UINT txStatus;
 	SmsLinkNodePtr pNewSms;
 	//allocate mem
-	txStatus = allocateMemInPool(pNewSms);
+	txStatus = allocateMemInPool(&pNewSms);
 	if(txStatus != TX_SUCCESS) return FAILURE;
 
 	//fill it's fields
@@ -352,10 +352,10 @@ void addSmsToLinkedList(SmsLinkNodePtr pNewSms)
 
 }
 
-UINT allocateMemInPool(SmsLinkNodePtr pNewSms)
+UINT allocateMemInPool(SmsLinkNodePtr * pNewSms)
 {
 	//allocate a memory block for the linked list node, form the SmsLinkListPool
-	return tx_block_allocate(&gSmsLinkListPool, (VOID**) &pNewSms,TX_NO_WAIT);
+	return tx_block_allocate(&gSmsLinkListPool, (VOID**) pNewSms,TX_NO_WAIT);
 	/* If status equals TX_SUCCESS, pNewNode contains the
 	* address of the allocated block of memory.
 	*/
@@ -384,7 +384,7 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 	DBG_ASSERT(pSms != NULL);
 
 	SmsLinkNodePtr pNewSms;
-	UINT txStatus = allocateMemInPool(pNewSms);
+	UINT txStatus = allocateMemInPool(&pNewSms);
 
 	if(txStatus != TX_SUCCESS) return txStatus;
 
