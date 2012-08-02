@@ -30,7 +30,11 @@ void tx_application_define(void *first)
     DBG_ASSERT(status == TX_SUCCESS);
 
 
+    //set initial values to the timer tx using
+    timer_arm_tx_timer(TX_TICK_MS);
 
+    //enable interrupts
+    _enable();
 }
 
 /*
@@ -50,13 +54,6 @@ void mainInitThreadMainFunc(ULONG v)
 
     	status = controllerInit();
     	DBG_ASSERT(status == TX_SUCCESS);
-
-    	//set initial values to the timer tx using
-    	timer_arm_tx_timer(TX_TICK_MS);
-
-    	//enable interrupts
-    	_enable();
-
 }
 
 void main()
