@@ -397,6 +397,9 @@ TX_STATUS controllerInit()
                 return TX_START_ERROR;
         }
 
+        viewSetRefreshScreen();
+        viewSignal();
+
         return TX_SUCCESS;
 }
 
