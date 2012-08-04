@@ -419,7 +419,7 @@ void renderMessageDisplayScreen()
 			SMS_DELIVER inMsg;
 			SMS_DELIVER* pInMsg = &inMsg;
 			length = sizeof(SMS_DELIVER);
-			modelGetSmsByFileName((uint8_t*)pMessage->fileName, &length, (char*)pInMsg);
+			modelGetSmsByFileName(pMessage->fileName, &length, (char*)pInMsg);
 
 			//set time stamp
 			setTimeFromTimeStamp(line,pInMsg->timestamp);
@@ -452,7 +452,7 @@ void renderMessageDisplayScreen()
 			SMS_SUBMIT outMsg;
 			SMS_SUBMIT* pOutMsg = &outMsg;
 			length = sizeof(SMS_SUBMIT);
-			modelGetSmsByFileName((uint8_t*)pMessage->fileName, &length, (char*)pOutMsg);
+			modelGetSmsByFileName(pMessage->fileName, &length, (char*)pOutMsg);
 
 
 			dataLength =pOutMsg->data_length;
@@ -542,4 +542,3 @@ bool viewIsLastRowSelected()
 {
 	return (gSelectedLineIndex+1 == modelGetSmsDbSize())|| (gSelectedLineIndex+1==(SCREEN_HEIGHT-1));
 }
-
