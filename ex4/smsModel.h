@@ -15,7 +15,7 @@ typedef enum
 } message_type;
 
 #define MAX_NUM_SMS (100)
-#define SMS_FILE_NAME_LENGTH 2
+
 
 /*
 typedef struct _SMS_DELIVER {
@@ -47,7 +47,7 @@ struct SmsLinkNode
         SmsLinkNodePtr  pPrev;
         message_type    type;
 		char title[ID_MAX_LENGTH];
-		uint8_t fileName[SMS_FILE_NAME_LENGTH];
+		uint32_t fileName;
 };
 
 /*
@@ -65,7 +65,7 @@ UINT modelInit();
 			 when the function return this argument will hold the file size, i.e. the actual used space size of the 'data' buffer.
 	data - a pointer for a buffer to hold the file content.
 */
-UINT modelGetSmsByFileName(const uint8_t* fileName, unsigned* smsSize, char* data);
+UINT modelGetSmsByFileName(const uint32_t fileName, unsigned* smsSize, char* data);
 
 /*
  * get the enum of the current been displayed screen
@@ -149,7 +149,7 @@ UINT modelGetSmsDbSize();
 SmsLinkNodePtr modelGetFirstSms();
 
 /*
- * try to get the lock (mutex) on the sms data-base 
+ * try to get the lock (mutex) on the sms data-base
  */
 TX_STATUS modelAcquireLock();
 
