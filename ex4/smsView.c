@@ -367,7 +367,7 @@ void renderMessageNumberScreen()
 	//in case of refresh, clear the rest of the screen and draw the bottom line
 	if (gViewRefreshScreen)
 	{
-		for(i = 1 ; i < SCREEN_WIDTH-1 ; ++i)
+		for(i = 1 ; i < SCREEN_HEIGHT-1 ; ++i)
 		{
 			lcd_set_row_without_flush(i,false,BLANK_LINE,SCREEN_WIDTH);
 		}
