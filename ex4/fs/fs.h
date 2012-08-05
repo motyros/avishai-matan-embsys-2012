@@ -78,18 +78,16 @@ FS_STATUS fs_read(const char* filename, unsigned* length, char* data);
 /*
 
   Description:
-	Read the content of a file.
+	Get the name of a file.
 
   Arguments:
 	index  - the index of the desired file (zero based)
-	length - when calling the function this argument should hold the size of the 'data' input buffer.
-			 when the function return this argument will hold the file size, i.e. the actual used space size of the 'data' buffer.
-	data - a pointer for a buffer to hold the file content.
+	length - when calling the function this argument should hold the size of the 'name' input buffer.
+			 when the function return this argument will hold the file name size, i.e. the actual used space size of the 'name' buffer.
+	name - a pointer for a buffer to hold the file name.
 
 
 */
-//FS_STATUS fs_read_by_index(unsigned index,unsigned* length, char* data);
-
 FS_STATUS fs_get_filename_by_index(unsigned index,unsigned* length, char* name);
 
 /*

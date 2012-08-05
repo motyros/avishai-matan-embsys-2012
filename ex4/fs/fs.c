@@ -1251,9 +1251,10 @@ FS_STATUS fs_get_filename_by_index(unsigned index,unsigned* length, char* name)
 			++fileNameLen;
 		}
 
-		if (fileNameLen < *length)
+		if (fileNameLen > *length)
 		{
 			status = FAILURE;
+			break;
 		}
 
 		memcpy(name,desc.fileName,fileNameLen);
