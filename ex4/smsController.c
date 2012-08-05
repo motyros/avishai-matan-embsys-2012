@@ -451,6 +451,9 @@ void controllerPacketArrived()
                         break;
                 }
 
+                //TODO
+                int i;
+                for(i=0;i<50;++i)
                 //add the delivered sms to the liked list
                 modelAddSmsToDb(&deliverSms,INCOMMING_MESSAGE);
 
