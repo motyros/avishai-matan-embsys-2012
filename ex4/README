@@ -2,39 +2,43 @@ avishl02,matanp01
 Avishai Lazar 066641200 
 Matan Perel 039998570 
  
-project: Exercise 3 
+project: Exercise 4 
  
 submited files: 
  
-	README				- this file 
-	makefile     			- a make file
-	device.svr3			- mapping of the segments to memory
-	ivt.s				- interrupt vector table
-    common_defs.h                   - common definitions for the library
-	main.c				- main entry of our program
+	README						- this file 
+	makefile     				- a make file
+	device.svr3					- mapping of the segments to memory
+	ivt.s						- interrupt vector table
+    common_defs.h				- common definitions for the library
+	main.c						- main entry of our program
 	embsys_sms_protocol_mine.c	- implementation of the sms protocol
 	embsys_sms_protocol_mine.h	- sms protocol interface
-	smsModel.c			- implementation of the model part (see our remarks)
-	smsmodel.h			- model's interface
-	smsView.c			- implementation of the view part
-	smsView.h			- view's interface
-	smsController.c			- implementation of the controller part
-	smsController.h			- controller's interfcae
+	smsModel.c					- implementation of the model part (see our remarks)
+	smsmodel.h					- model's interface
+	smsView.c					- implementation of the view part
+	smsView.h					- view's interface
+	smsController.c				- implementation of the controller part
+	smsController.h				- controller's interfcae
 	input_panel/input_panel.c	- input panel's driver
 	input_panel/input_panel.h	- input panel's driver's interface
-	flash/flash.c			- flash memory's driver
-	flash/flash.h			- flash memory's driver's interface
-	LCD/LCD.c			- LCD's driver
-	LCD/LCD.h			- LCD's driver's interface
-	network/network.c		- network card driver
-	network/network.h		- network card driver's interface
-	timer/timer.c			- timer driver
-	timer/timer.h			- timer driver's interface
-	TX/tx_api.h			- threadX api
-	TX/tx_port.h			- porintg of TX for ARC enviroment
-	TX/tx.a				- tx compiled and linkded library
+	flash/flash.c				- flash memory's driver
+	flash/flash.h				- flash memory's driver's interface
+	fs/fs.c						- filesystem driver
+	fs/fs.h						- filesystem driver's interface
+	LCD/LCD.c					- LCD's driver
+	LCD/LCD.h					- LCD's driver's interface
+	network/network.c			- network card driver
+	network/network.h			- network card driver's interface
+	timer/timer.c				- timer driver
+	timer/timer.h				- timer driver's interface
+	TX/tx_api.h					- threadX api
+	TX/tx_port.h				- porintg of TX for ARC enviroment
+	TX/tx.a						- tx compiled and linkded library
 	
 ============================remarks====================================
+
+our "phone number" is 06664120
 
 system designe didn't change. you can read ex3's README for our elaboration about it.
 
@@ -42,6 +46,7 @@ we will focuse on the FS design and on the optimization design.
 
 FILE SYSTEM DESIGN
 ------------------
+ * we implemented a version of the article http://static.usenix.org/event/usenix05/tech/general/full_papers/gal/gal_html/.
 
  * every 4Kb is called EraseUnit since this is the smallest unit the flash can erase
  
@@ -66,20 +71,33 @@ FILE SYSTEM DESIGN
    during the block erase we crashed, if one canary is missing, we check that the EraseUnit is indeed the erase unit we wrote at the log's last 4 bytes) if so, we have a reson to belive our FS is corrupted by some
    attacker or by malfunction and we re-install the FS structure and getting new and empty FS.
    
- * BONUS PART - we implemented ware out mechanism. every EraseUnit has "Erase Number" which is the number of erasure this EraseUnit had. when we searching for block to erase (because we want to write file and don't have
-				enough free space) we search for the EraseUnit with lowest Erase Number value which has enough space. this way will lead to uniform distribution of EraseUnits' erasures if we assume that when deleting a file every
-				file has the same probability to be deleted.
+ * BONUS PART!!!
+ 
+	we implemented ware out mechanism. every EraseUnit has "Erase Number" which is the number of erasure this EraseUnit had. when we searching for block to erase (because we want to write file and don't have
+	enough free space) we search for the EraseUnit with lowest Erase Number value which has enough space. this way will lead to uniform distribution of EraseUnits' erasures if we assume that when deleting a file every
+	file has the same probability to be deleted.
 				
-				we stessed the FS with maximum file's size fs_write("file",buf,512) with the same file name - every write will delete the previosue file "file". we did it few thousends of times and monitored the Erase Number distribution.
-				we found that it was Uniform Distribution all along.
+	we stessed the FS with maximum file's size fs_write("file",buf,512) with the same file name - every write will delete the previosue file "file". we did it few thousends of times and monitored the Erase Number distribution.
+	we found that it was Uniform Distribution all along.
 
 
 OPTIMIZATIONS
 -------------
+* Minimize used FLASH size - we were able to use 64KB flash size to support up to 105 files of 0.5Kb or up to 4710 files of 0Kb. read the FILE SYSTEM DESIGN section for detailed explanation
 
-* our file system design squeezed flash capacity and we managed to achive the requirements and even more (up to 105 files of 0.5Kb or 4710 files of 0Kb)
-  with 64Kb flash.
+* Minimize used ROM size - we squieez all our code into 64KB ROM...
 
+* Minimize used RAM size - we went all over golbal data structures and make sure we don't use more than we need.
+						   we used minimum stack size of 1024bytes per thread, we made sure this is more than enough by placing canaries (spaceal values like 0xDEADBEEF or 0xABABABAB) at the end
+						   of the stack, stress the system and make sure that this value didn't overrune.
+						   
+						   we paied some RAM space to store data structure for the FileSystem. this DATS save us many many FLASH access and we think this is a good trade off since FLASH IO is relatively 
+						   slow and expensive.
+							
 
+* Minimize power consumption - 	all threads waiting on events flag for an event such as packet arrives or user press a button which been set by the ISRs. no busy waiting at all!
+								we made the processor halt when system is idle. we did it by running thread with the lowest priority. this thread will run ONLY when all other threads
+								idle, this way the system will halt when there is no activity.
+								
 thanks,
 Avishai & Matan
