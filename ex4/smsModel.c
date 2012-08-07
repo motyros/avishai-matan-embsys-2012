@@ -509,16 +509,13 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 	char fileName[SMS_FILE_NAME_LENGTH] = {0};
 	*(uint32_t*)fileName = findFileName();
 
-//fill the fields
+	//fill the fields
 	fsStatus = fillSmsNodeFields(fileName, type, pNewSms,(char*)pSms);
 
-//write the sms to file system
+	//write the sms to file system
 	fsStatus = writeSmsToFileSystem(type,pNewSms,(char*)pSms);
 
 	addSmsToLinkedListEnd(pNewSms);
-
-	//copy the given sms to the allocated memory
-	//        memcpy(pNewSms->pSMS,pSms,SMS_BLOCK_SIZE);
 
 	//TODO what to return?
 	return fsStatus;

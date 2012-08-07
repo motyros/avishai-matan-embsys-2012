@@ -879,7 +879,7 @@ void sendEditSms()
         //add the device id to the edited sms
         memcpy(smsToSend->device_id,DEVICE_ID,strlen(DEVICE_ID));
 
-        // fill the sms to send
+        //fill the sms to send
         embsys_fill_submit(gSendBuf,smsToSend,&dataLen);
 
         //send the packet

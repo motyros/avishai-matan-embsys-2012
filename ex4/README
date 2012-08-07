@@ -10,12 +10,12 @@ submited files:
 	makefile     				- a make file
 	device.svr3					- mapping of the segments to memory
 	ivt.s						- interrupt vector table
-    common_defs.h				- common definitions for the library
+	common_defs.h				- common definitions for the library
 	main.c						- main entry of our program
 	embsys_sms_protocol_mine.c	- implementation of the sms protocol
 	embsys_sms_protocol_mine.h	- sms protocol interface
 	smsModel.c					- implementation of the model part (see our remarks)
-	smsmodel.h					- model's interface
+	smsModel.h					- model's interface
 	smsView.c					- implementation of the view part
 	smsView.h					- view's interface
 	smsController.c				- implementation of the controller part
