@@ -438,12 +438,12 @@ void controllerPacketArrived()
         do
         {
                 status = embsys_parse_submit_ack((char*)gPacketReceivedBuffer,&submitAck);
-                if(status == EMBSYS_SUCCESS) break;
+                if(status == SUCCESS) break;
 
                 //try to parse to deliver sms
                 SMS_DELIVER deliverSms;
                 status = embsys_parse_deliver((char*)gPacketReceivedBuffer,&deliverSms);
-                if(status != EMBSYS_SUCCESS) break;
+                if(status != SUCCESS) break;
 
                 //in case it is a delivered sms, add it to the DB
                 if(modelAcquireLock() != TX_SUCCESS)

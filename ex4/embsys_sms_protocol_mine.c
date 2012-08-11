@@ -173,7 +173,7 @@ EMBSYS_STATUS embsys_fill_probe(char *buf, SMS_PROBE *msg_fields, char is_ack, u
 
    }
 
-   return EMBSYS_SUCCESS;
+   return SUCCESS;
 }
 
 
@@ -228,7 +228,7 @@ EMBSYS_STATUS embsys_fill_submit(char *buf, SMS_SUBMIT *msg_fields, unsigned *le
 
    *len = (unsigned)(buf - origBuf);
    
-   return EMBSYS_SUCCESS;
+   return SUCCESS;
 }
 
 
@@ -268,11 +268,11 @@ EMBSYS_STATUS embsys_parse_submit_ack(char *buf, SMS_SUBMIT_ACK *msg_fields)
       }
       convNibbleSwapedToString(buf,msg_fields->recipient_id,numberLength);
       
-      return EMBSYS_SUCCESS;
+      return SUCCESS;
 
    }while(0);
 
-   return EMBSYS_FAIL;
+   return FAIL;
 }
 
 
@@ -326,10 +326,10 @@ EMBSYS_STATUS embsys_parse_deliver(char *buf, SMS_DELIVER *msg_fields)
 
       decodeTo8bitStr(buf,msg_fields->data,msg_fields->data_length);
 
-      return EMBSYS_SUCCESS;
+      return SUCCESS;
    }while(0);
 
-   return EMBSYS_FAIL;
+   return FAIL;
    
 }
 

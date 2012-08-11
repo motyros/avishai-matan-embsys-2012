@@ -2,7 +2,7 @@
 #define __EMBSYS_FS_H_
 
 typedef enum {
-	SUCCESS =							0x00000000,
+	FS_SUCCESS =							0x00000000,
 	FS_NOT_READY =						0x00000001,
 	FS_IS_BUSY =						0x00000002,
 	FAILURE_ACCESSING_FLASH =			0x00000003,
@@ -138,19 +138,19 @@ FS_STATUS fs_list(unsigned* length, char* files);
 
 	settings.block_count = 16;
 
-	if (SUCCESS != fs_init(settings)) {
+	if (FS_SUCCESS != fs_init(settings)) {
 		... error handling ... 
 	}
 
-	if (SUCCESS != fs_write("file1", strlen(file1data), file1data){
+	if (FS_SUCCESS != fs_write("file1", strlen(file1data), file1data){
 		... error handling ... 
 	}
 
-	if (SUCCESS != fs_write("file2", strlen(file2data), file2data){
+	if (FS_SUCCESS != fs_write("file2", strlen(file2data), file2data){
 		... error handling ... 
 	}
 
-	if (SUCCESS != fs_list(&count, files){
+	if (FS_SUCCESS != fs_list(&count, files){
 		... error handling ... 
 	}
 
@@ -159,7 +159,7 @@ FS_STATUS fs_list(unsigned* length, char* files);
 		unsigned length = sizeof(data);
 		printf("%s\n", p);
 		
-		if (SUCCESS != fs_read(p, &length, data){
+		if (FS_SUCCESS != fs_read(p, &length, data){
 			... error handling ... 
 		}
 

@@ -105,7 +105,6 @@ gFileNameCounter = SMS_FILE_NAME_GARD;
 	FS_STATUS fsStatus = fs_init(fsSettings);
 	if(fsStatus != SUCCESS)
 	{
-			//TODO what to return?
 			return fsStatus;
 	}
 
@@ -113,7 +112,6 @@ gFileNameCounter = SMS_FILE_NAME_GARD;
 	fsStatus = fs_count(&fileCount);
 	if(fsStatus != SUCCESS)
 	{
-			//TODO what to return?
 			return fsStatus;
 	}
 
@@ -131,7 +129,6 @@ gFileNameCounter = SMS_FILE_NAME_GARD;
 	//else the file system not empty
 	fsStatus = fillLinkedList(fileCount);
 
-	//TODO what to return?
 	return fsStatus;
 
 }
@@ -208,7 +205,6 @@ UINT modelGetSmsByFileName(const uint32_t fileName, unsigned* smsSize, char* dat
 	char pFileName[SMS_FILE_NAME_LENGTH] = {0};
 	*((uint32_t*)pFileName) = fileName;
 	FS_STATUS status = fs_read((char*)pFileName, smsSize, data);
-	//TODO what to return?
 	if(status != SUCCESS) return TX_NO_INSTANCE;
 	return TX_SUCCESS;
 }
@@ -517,7 +513,6 @@ UINT modelAddSmsToDb(void* pSms,const message_type type)
 
 	addSmsToLinkedListEnd(pNewSms);
 
-	//TODO what to return?
 	return fsStatus;
 }
 

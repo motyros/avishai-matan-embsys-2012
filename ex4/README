@@ -71,15 +71,17 @@ FILE SYSTEM DESIGN
    during the block erase we crashed, if one canary is missing, we check that the EraseUnit is indeed the erase unit we wrote at the log's last 4 bytes) if so, we have a reson to belive our FS is corrupted by some
    attacker or by malfunction and we re-install the FS structure and getting new and empty FS.
    
- * We used a uint32_t number in internal use for a message file name.
-This number has 32 bits. But in order not to get 8 bits in a row of zeros (-the char '/0' - that will confuse the name), we made sure to always have four bits turned on (one for each byte).
-In total we got 28 bits free that give us the possibility space of 2^28 = 268,435,456 filenames.
-This number is large enough, because we get a flash memory, and we learned that flash memory is writable up to only 100,000 times.
-We calculated and found, that the maximum of messages we can write to a memory in size of 16 * 4K is 33,600,000 messages. And this number is smaller from our filenames namespace. As required.
-The calculation of the maximum amount of messages that can be write to the memory:
-Every block has 5 bytes of general information and 13 bytes of information for each file entered.
-An SUBMIT message weighs 181 bytes (the smallest message is an SUBMIT message). So the total space this message takes in the memory is 181+13 = 194 bytes. So a empty block (in size of 4K) can be filled with 21 message at most.
-And we have 16 blocks in our memory. So 16*21=336 messages needed to have any memory area to be written at least once. And if we double the number 100,000 times, will get the number of messages that needed to have the total memory written everywhere at least 100,000 times. It gives us 33.6 million messages. As required.
+ * We used an uint32_t number for internal message file name.
+   This number has 32 bits. since file name ends with \0 terminator, we turn on the msb for each byte in this uint32_t. We got 28 bits free that 
+   give us the possibility space of 2^28 = 268,435,456 filenames.
+   This number is large enough, because we get a flash memory, and we learned that flash memory is writable up to only 100,000 times.
+   We calculated and found, that the maximum of messages we can write to a memory in size of 16 * 4K is 33,600,000 messages. And this number is 
+   smaller then our filenames namespace As required. The calculation of the maximum amount of messages that can be write to the memory:
+   Every block has 5 bytes of general information and 13 bytes of information for each file descriptor.
+   SUBMIT message weighs 181 bytes (the smallest message is an SUBMIT message). So the total space this message takes in the memory is 181+13 = 194 bytes. 
+   So an empty block (in size of 4K) can be filled with 21 message at most.
+   And we have 16 blocks in our memory. So 16*21=336 messages needed to stored to make every block written at least once. And if we multiply the number 100,000 times, 
+   will get the number of messages that needed to have the total memory written everywhere at least 100,000 times. It gives us 33.6 million messages. As required.
 
  * BONUS PART!!!
  
@@ -95,7 +97,7 @@ OPTIMIZATIONS
 -------------
 * Minimize used FLASH size - we were able to use 64KB flash size to support up to 105 files of 0.5Kb or up to 4710 files of 0Kb. read the FILE SYSTEM DESIGN section for detailed explanation
 
-* Minimize used ROM size - we squieez all our code into 64KB ROM...
+* Minimize used ROM size - we squieez all our code into 64KB ROM.
 
 * Minimize used RAM size - we went all over golbal data structures and make sure we don't use more than we need.
 						   we used minimum stack size of 1024bytes per thread, we made sure this is more than enough by placing canaries (spaceal values like 0xDEADBEEF or 0xABABABAB) at the end
