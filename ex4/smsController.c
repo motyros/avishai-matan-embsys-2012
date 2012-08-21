@@ -52,7 +52,7 @@ void keyPadThreadMainFunc(ULONG v);
 void networkReceiveThreadMainFun(ULONG v);
 void networkSendThreadMainFunc(ULONG v);
 void eraseEditSmsFields();
-void updateModelFields();
+void updateModelFieldsAfterAdd();
 void sendEditSms();
 void handleAddCharToEditSms(const char buttonX[]);
 void deleteSms(const SmsLinkNodePtr pFirstSms,const SmsLinkNodePtr pSelectedSms);
@@ -455,7 +455,7 @@ void controllerPacketArrived()
                 modelAddSmsToDb(&deliverSms,INCOMMING_MESSAGE);
 
                 //update the relevant fields
-                updateModelFields();
+                updateModelFieldsAfterAdd();
 
                 //release the lock
                 modelReleaseLock();
@@ -480,14 +480,24 @@ void controllerPacketArrived()
 /*
  * updates the model fields if needed.
  */
-void updateModelFields()
+void updateModelFieldsAfterAdd()
 {
-        //if it is the first sms, update the relevant fields
-        if (modelGetSmsDbSize() == 1)
-        {
-                modelSetFirstSmsOnScreen(modelGetFirstSms());
-                modelSetSelectedSms(modelGetFirstSms());
-        }
+    //if it is the first sms, update the relevant fields
+    if (modelGetSmsDbSize() == 1)
+	{
+			modelSetFirstSmsOnScreen(modelGetFirstSms());
+			modelSetSelectedSms(modelGetFirstSms());
+	}
+	else
+	{
+		SmsLinkNodePtr firstSmsOnScreen = modelGetFirstSmsOnScreen();
+		 if(viewIsLastRowSelected()
+				&& modelGetSmsSerialNumber(firstSmsOnScreen) > modelGetSmsSerialNumber(modelGetSelectedSms()))
+		 {
+			 modelSetFirstSmsOnScreen(firstSmsOnScreen->pNext);
+		 }
+		 modelGetSelectedSms();
+	}
 }
 
 
@@ -816,7 +826,17 @@ void handleNumberScreen(button but)
             {
                 return;
             }    
+            //TODO*************************************************/
+            //int i;
+            //for(i=0;i<50;++i){
+           /*************************************************/
+
             sendEditSms();
+
+            /*************************************************/
+
+            //}
+            /***************************************************/
             modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
             viewSetRefreshScreen();
             viewSignal();
@@ -885,11 +905,21 @@ void sendEditSms()
         //send the packet
         network_send_packet_start((uint8_t*)gSendBuf,dataLen,dataLen);
 
+        //in case it is a delivered sms, add it to the DB
+        if(modelAcquireLock() != TX_SUCCESS)
+        {
+        	return;
+        }
+
         //add the sms to the linked list
         modelAddSmsToDb(smsToSend, OUTGOING_MESSAGE);
 
         //update the relevant fields
-        updateModelFields();
+        updateModelFieldsAfterAdd();
+
+        //release the lock
+        modelReleaseLock();
+
 }
 
 /*

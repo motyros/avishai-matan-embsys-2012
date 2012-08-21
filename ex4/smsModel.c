@@ -131,6 +131,14 @@ gFileNameCounter = SMS_FILE_NAME_GARD;
 	return fsStatus;
 
 }
+//TODO**********************************/
+void doNothing()
+{
+	int a;
+	a++;
+	a=a+3;
+}
+/******************************************/
 
 FS_STATUS createAndAddSmsLinkNodeToDB(char* fileName, const message_type type, char* data)
 {
@@ -143,6 +151,7 @@ FS_STATUS createAndAddSmsLinkNodeToDB(char* fileName, const message_type type, c
 
 	//fill it's fields
 	fsStatus = fillSmsNodeFields(fileName, type, pNewSms, data);
+
 	//add to the linked list
 	addSmsToLinkedList(pNewSms);
 
@@ -298,6 +307,15 @@ FS_STATUS fillTitle(const message_type type, SmsLinkNodePtr pNewSms, char* data)
 		{
 			pNewSms->title[i] = pInSms->sender_id[i];
 		}
+
+		//TODO/******************************************/
+		char tit = pNewSms->title[0];
+		if(tit=='\0')
+		{
+			doNothing();
+		}
+		/**********************************************/
+
 		return SUCCESS;
 
 	case OUTGOING_MESSAGE:
@@ -308,6 +326,15 @@ FS_STATUS fillTitle(const message_type type, SmsLinkNodePtr pNewSms, char* data)
 		{
 			pNewSms->title[i] = pOutSms->recipient_id[i];
 		}
+
+		//TODO/******************************************/
+		tit = pNewSms->title[0];
+		if(tit=='\0')
+		{
+			doNothing();
+		}
+		/**********************************************/
+
 		return SUCCESS;
 	}
 	return COMMAND_PARAMETERS_ERROR;
@@ -490,6 +517,9 @@ FS_STATUS fillSmsNodeFields(char* fileName, const message_type type, SmsLinkNode
 
 	return fsStatus;
 }
+
+
+
 
 UINT modelAddSmsToDb(void* pSms,const message_type type)
 {

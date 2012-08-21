@@ -47,6 +47,13 @@ dump:
 	hexdump embsys_flash.img > flash_dump.txt
 	gedit flash_dump.txt &
 	
+dumpbug:
+	rm -f flash_dump.txt
+	rm -f embsys_flash_bug.img
+	cp -i embsys_flash.img embsys_flash_bug.img
+	hexdump embsys_flash.img > flash_dump.txt
+	gedit flash_dump.txt &
+	
 tar:
 	tar --exclude=".*" -cvjf avishl02_matanp01 input_panel LCD network timer TX common_defs.h device.svr3 embsys_sms_protocol_mine.c embsys_sms_protocol_mine.h ex3.args ivt.s  main.c makefile README smsModel.c smsModel.h smsView.c smsView.h smsController.c smsController.h 
 
