@@ -36,7 +36,7 @@
 #define DEVICE_ID "06664120"
 
 //*********** Mocro Functions **********//
-#define ARRAY_CHAR_LEN(a) (sizeof(a)/sizeof(CHAR))
+#define ARRAY_CHAR_LEN(a) (strlen(a)/sizeof(CHAR))
 
 //network send event flag values
 typedef enum
@@ -89,16 +89,16 @@ TX_EVENT_FLAGS_GROUP gNetworkSendEventFlags;
 ////////////////////////////////////////////////////////////////////
 
 //********** arrays for the buttons keypad ***********//
-const CHAR gButton1[] = {'.',',','?','1'};
-const CHAR gButton2[] = {'a','b','c','2'};
-const CHAR gButton3[] = {'d','e','f','3'};
-const CHAR gButton4[] = {'g','h','i','4'};
-const CHAR gButton5[] = {'j','k','l','5'};
-const CHAR gButton6[] = {'m','n','o','6'};
-const CHAR gButton7[] = {'p','q','r','s','7'};
-const CHAR gButton8[] = {'t','u','v','8'};
-const CHAR gButton9[] = {'w','x','y','z','9'};
-const CHAR gButton0[] = {' ','0'};
+const CHAR gButton1[] = {'.',',','?','1','\0'};
+const CHAR gButton2[] = {'a','b','c','2','\0'};
+const CHAR gButton3[] = {'d','e','f','3','\0'};
+const CHAR gButton4[] = {'g','h','i','4','\0'};
+const CHAR gButton5[] = {'j','k','l','5','\0'};
+const CHAR gButton6[] = {'m','n','o','6','\0'};
+const CHAR gButton7[] = {'p','q','r','s','7','\0'};
+const CHAR gButton8[] = {'t','u','v','8','\0'};
+const CHAR gButton9[] = {'w','x','y','z','9','\0'};
+const CHAR gButton0[] = {' ','0','\0'};
 
 //the number of clicks on the same button in the continuos time
 int gInEditContinuosNum;
@@ -654,6 +654,15 @@ void handleAddCharToEditSms(const char buttonX[])
         SMS_SUBMIT* inEditSms = modelGetInEditSms();
         if(gInEditContinuosNum > 0 || inEditSms->data_length == DATA_MAX_LENGTH)
         {
+        	//TODO*******************************************/
+        	int arrLen = ARRAY_CHAR_LEN(buttonX);
+        	int sizearr = strlen(buttonX);
+        	int sizeChar = sizeof(CHAR);
+        	if(gInEditContinuosNum >= 5)
+        	{
+        		int nums = gInEditContinuosNum % ARRAY_CHAR_LEN(buttonX);
+        	}
+        	//*************************************************/
                 //the specific char in this button according to the timer delay
                 int numChar = gInEditContinuosNum % ARRAY_CHAR_LEN(buttonX);
                 //replace the last char
@@ -826,17 +835,8 @@ void handleNumberScreen(button but)
             {
                 return;
             }    
-            //TODO*************************************************/
-            //int i;
-            //for(i=0;i<50;++i){
-           /*************************************************/
 
             sendEditSms();
-
-            /*************************************************/
-
-            //}
-            /***************************************************/
             modelSetCurrentScreenType(MESSAGE_LISTING_SCREEN);
             viewSetRefreshScreen();
             viewSignal();
