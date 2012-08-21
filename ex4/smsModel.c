@@ -1,5 +1,4 @@
 #include "smsModel.h"
-#include "embsys_sms_protocol_mine.h"
 #include "fs/fs.h"
 
 
@@ -288,6 +287,7 @@ FS_STATUS fillTitle(const message_type type, SmsLinkNodePtr pNewSms, char* data)
 	SMS_DELIVER* pInSms;
 	SMS_SUBMIT* pOutSms;
 	int i;
+	memset(pNewSms->title,0,sizeof(ID_MAX_LENGTH));
 	switch(type)
 	{
 	case INCOMMING_MESSAGE:

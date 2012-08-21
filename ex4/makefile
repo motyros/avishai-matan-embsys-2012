@@ -18,13 +18,13 @@ network.o: network/network.c network/network.h common_defs.h
 timer.o: timer/timer.c timer/timer.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-smsController.o: smsController.c smsController.h TX/tx_api.h common_defs.h input_panel/input_panel.h
+smsController.o: smsController.c smsController.h smsModel.h smsView.h timer/timer.h TX/tx_api.h common_defs.h input_panel/input_panel.h network/network.h embsys_sms_protocol_mine.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-smsModel.o: smsModel.c smsModel.h common_defs.h TX/tx_api.h embsys_sms_protocol_mine.h
+smsModel.o: smsModel.c smsModel.h input_panel/input_panel.h fs/fs.h common_defs.h TX/tx_api.h embsys_sms_protocol_mine.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-smsView.o: smsView.c smsView.h TX/tx_api.h common_defs.h
+smsView.o: smsView.c smsView.h smsModel.h LCD/LCD.h TX/tx_api.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
 
 embsys_sms_protocol_mine.o: embsys_sms_protocol_mine.c embsys_sms_protocol_mine.h
@@ -33,26 +33,20 @@ embsys_sms_protocol_mine.o: embsys_sms_protocol_mine.c embsys_sms_protocol_mine.
 ivt.o: ivt.s
 	mcc -c -a6 -g -w3 $< -o $@
 
-main_orig.o: main.c TX/tx_api.h common_defs.h smsController.h timer/timer.h smsView.h smsModel.h
+main_orig.o: main.c TX/tx_api.h timer/timer.h common_defs.h smsController.h smsView.h smsModel.h flash/flash.h fs/fs.h 
 	mcc -c -a6 -g -w3 $< -o $@
 
-main.o: main.c TX/tx_api.h common_defs.h flash/flash.h fs/fs.h timer/timer.h
+main.o: main.c TX/tx_api.h timer/timer.h common_defs.h smsController.h smsView.h smsModel.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-
-a_orig.out: main.o input_panel.o LCD.o network.o timer.o smsModel.o smsView.o smsController.o embsys_sms_protocol_mine.o ivt.o device.svr3
-	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
-
-a.out: main.o timer.o flash.o fs.o input_panel.o LCD.o network.o device.svr3 smsView.o smsModel.o smsController.o embsys_sms_protocol_mine.o ivt.o
-	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
-
-a_matan.out: main.o timer.o flash.o fs.o input_panel.o LCD.o network.o device.svr3 smsView.o smsModel.o smsController.o embsys_sms_protocol_mine.o ivt.o
+a.out: main.o flash.o fs.o input_panel.o LCD.o network.o timer.o smsController.o smsModel.o smsView.o embsys_sms_protocol_mine.o ivt.o device.svr3 
 	mcc -a6 $+ TX/tx.a -o $@ -Hldopt=-m -Hldopt=-uInterruptTable -Hldopt=-C,output=device.map
 
 dump:
 	rm -f flash_dump.txt
 	hexdump embsys_flash.img > flash_dump.txt
 	gedit flash_dump.txt &
+	
 tar:
 	tar --exclude=".*" -cvjf avishl02_matanp01 input_panel LCD network timer TX common_defs.h device.svr3 embsys_sms_protocol_mine.c embsys_sms_protocol_mine.h ex3.args ivt.s  main.c makefile README smsModel.c smsModel.h smsView.c smsView.h smsController.c smsController.h 
 
