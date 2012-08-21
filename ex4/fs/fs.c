@@ -448,8 +448,8 @@ static FS_STATUS loadFilesystem()
       
 		gEUList[i].eraseNumber = header.eraseNumber;
 		gEUList[i].metadata.data = header.metadata.data;
-		gEUList[i].bytesFree = FLASH_BLOCK_SIZE - sizeof(EraseUnitHeader);
-        gEUList[i].nextFreeOffset = FLASH_BLOCK_SIZE;
+		gEUList[i].bytesFree = FLASH_BLOCK_SIZE - sizeof(EraseUnitHeader) - sizeof(LogEntry);
+        gEUList[i].nextFreeOffset = FLASH_BLOCK_SIZE - sizeof(LogEntry);
 
 		//if we found valid log
 		if (header.metadata.bits.type == LOG)
@@ -469,9 +469,6 @@ static FS_STATUS loadFilesystem()
 			{
 				firstLogIndex = i;
 			}
-
-            gEUList[i].bytesFree -= sizeof(LogEntry);
-            gEUList[i].nextFreeOffset -= sizeof(LogEntry);
 		}
 		//regular sector, since the first operation we doing when adding file is to zero enptyEU bit, this condition is valid
         else if (gEUList[i].metadata.bits.emptyEU == 0)
