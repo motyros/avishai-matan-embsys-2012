@@ -6,35 +6,35 @@ project: Exercise 4
  
 submited files: 
  
-	README						- this file 
-	makefile     				- a make file
-	device.svr3					- mapping of the segments to memory
-	ivt.s						- interrupt vector table
-	common_defs.h				- common definitions for the library
-	main.c						- main entry of our program
+	README				- this file 
+	makefile     			- a make file
+	device.svr3			- mapping of the segments to memory
+	ivt.s				- interrupt vector table
+	common_defs.h			- common definitions for the library
+	main.c				- main entry of our program
 	embsys_sms_protocol_mine.c	- implementation of the sms protocol
 	embsys_sms_protocol_mine.h	- sms protocol interface
-	smsModel.c					- implementation of the model part (see our remarks)
-	smsModel.h					- model's interface
-	smsView.c					- implementation of the view part
-	smsView.h					- view's interface
-	smsController.c				- implementation of the controller part
-	smsController.h				- controller's interface
+	smsModel.c			- implementation of the model part (see our remarks)
+	smsModel.h			- model's interface
+	smsView.c			- implementation of the view part
+	smsView.h			- view's interface
+	smsController.c			- implementation of the controller part
+	smsController.h			- controller's interface
 	input_panel/input_panel.c	- input panel's driver
 	input_panel/input_panel.h	- input panel's driver's interface
-	flash/flash.c				- flash memory's driver
-	flash/flash.h				- flash memory's driver's interface
-	fs/fs.c						- filesystem driver
-	fs/fs.h						- filesystem driver's interface
-	LCD/LCD.c					- LCD's driver
-	LCD/LCD.h					- LCD's driver's interface
-	network/network.c			- network card driver
-	network/network.h			- network card driver's interface
-	timer/timer.c				- timer driver
-	timer/timer.h				- timer driver's interface
-	TX/tx_api.h					- threadX api
-	TX/tx_port.h				- porting of TX for ARC environment
-	TX/tx.a						- tx compiled and linked library
+	flash/flash.c			- flash memory's driver
+	flash/flash.h			- flash memory's driver's interface
+	fs/fs.c				- filesystem driver
+	fs/fs.h				- filesystem driver's interface
+	LCD/LCD.c			- LCD's driver
+	LCD/LCD.h			- LCD's driver's interface
+	network/network.c		- network card driver
+	network/network.h		- network card driver's interface
+	timer/timer.c			- timer driver
+	timer/timer.h			- timer driver's interface
+	TX/tx_api.h			- threadX api
+	TX/tx_port.h			- porting of TX for ARC environment
+	TX/tx.a				- tx compiled and linked library
 	
 ============================remarks====================================
 
@@ -50,26 +50,34 @@ FILE SYSTEM DESIGN
 
  * Every 4Kb is called EraseUnit since this is the smallest unit the flash can erase
  
- * Our 64Kb flash composed of 16 EraseUnits (blocks), our FS uses 15 EraseUnits to store files and one EraseUnit (a.k.a the Log) for compaction process (we will elaborate about that)
+ * Our 64Kb flash composed of 16 EraseUnits (blocks), our FS uses 15 EraseUnits to store files and one 
+   EraseUnit (a.k.a the Log) for compaction process (we will elaborate about that)
  
  * When file need to be written, we appilys First Fit Algorithm and place it at the first free slot we find.
  
- * When not enough free space been found, we try to compact some EraseUnit. we check if EraseUnit's free space + EraseUnit obsolete space (=space of deleted files) will be enough 
-   to host the new file, if yes, we moving the valid files of the EraseUnit to the log, erasing the EraseUnit and converting it to the new log, the previous log will become regular EraseUnit 
-   and will host the new file
+ * When not enough free space been found, we try to compact some EraseUnit. we check if EraseUnit's 
+   free space + EraseUnit obsolete space (=space of deleted files) will be enough to host the new file, if yes, we 
+   moving the valid files of the EraseUnit to the log, erasing the EraseUnit and converting it to the new log, the 
+   previous log will become regular EraseUnit  and will host the new file
    
- * To achieve atomicity, we took advantage of the fact that we using NOR flash in which bits been turn off. every such operation has "valid" bit, we performing the operation which leaving this valid bit
-   as "1" and only then we changing this bit only to "0". this change is atomic since we turning off one bit only and this valid bit indicates that whole section is valid.
+ * To achieve atomicity, we took advantage of the fact that we using NOR flash in which bits been turn off. 
+   every such operation has "valid" bit, we performing the operation which leaving this valid bit
+   as "1" and only then we changing this bit only to "0". this change is atomic since we turning off one 
+   bit only and this valid bit indicates that whole section is valid.
    
- * We developed fail safe mechanism to ensure that every operation either will succeed or fail without corrupting the FS no matter what happened (as long as no one from the outside change the flash bits)
+ * We developed fail safe mechanism to ensure that every operation either will succeed or fail without corrupting the FS 
+   no matter what happened (as long as no one from the outside change the flash's bits)
+
    1. write file - every file has "valid" bit, if this bit wasen't set at the end of the write, we ignore the file (file will be considered as deleted)
    2. delete file - we implemented the delete operation as turning the "obsolete" bit of the file from 1 to 0, thus, this operation is atomic
-   3. EraseUnit compaction - we saved the last 4 bytes of the Log to save some essential info about the compaction. when we loading the FS during boot, we check those 4 bytes, and if the "complete" bit is
-      not '0' we continue from the point we failed last time (we know when we failed by some control bits inside those 4 bytes)
+   3. EraseUnit compaction - we saved the last 4 bytes of every block to save some essential info about the compaction. when we loading the FS 
+      during boot, we check those 4 bytes of the current Log, and if the "complete" bit is not '0' we continue from the point we 
+      failed last time (we know when we failed by some control bits inside those 4 bytes)
 	  
- * Corruption from the outside - every EraseUnit has some special value (canary) after its header. when loading the FS during boot, we check those canaries, and if more than one is missing (one can be missing if
-   during the block erase we crashed, if one canary is missing, we check that the EraseUnit is indeed the erase unit we wrote at the log's last 4 bytes) if so, we have a reason to believe our FS is corrupted by some
-   attacker or by malfunction and we re-install the FS structure and getting new and empty FS.
+ * Corruption from the outside - every EraseUnit has some special value (canary) after its header. when loading the FS during boot, 
+   we check those canaries, and if more than one is missing (one can be missing if during the block erase we crashed, if 
+   one canary is missing, we check that the EraseUnit is indeed the erase unit we wrote at the log's last 4 bytes) if so, we 
+   have a reason to believe our FS is corrupted by some attacker or by malfunction and we re-install the FS structure and getting new and empty FS.
    
  * We used an uint32_t number for internal message file name.
    This number has 32 bits. since file name ends with \0 terminator, we turn on the msb for each byte in this uint32_t. We got 28 bits free that 
@@ -85,33 +93,37 @@ FILE SYSTEM DESIGN
 
  * BONUS PART!!!
  
-	We implemented ware out mechanism. every EraseUnit has "Erase Number" which is the number of erasure this EraseUnit had. when we searching for block to erase (because we want to write file and don't have
-	enough free space) we search for the EraseUnit with lowest Erase Number value which has enough space. this way will lead to uniform distribution of EraseUnits' erasures if we assume that when deleting a file every
-	file has the same probability to be deleted.
+	We implemented ware out mechanism. every EraseUnit has "Erase Number" which is the number of erasure this EraseUnit had. when we searching for block 
+        to erase (because we want to write file and don't have	enough free space) we search for the EraseUnit with lowest Erase Number value which has enough space. 
+        this way will lead to uniform distribution of EraseUnits' erasures if we assume that when deleting a file every	file has the same probability to be deleted.
 				
-	We stressed the FS with maximum file's size fs_write("file",buf,512) with the same file name - every write will delete the previosue file "file". we did it few thousends of times and monitored the Erase Number distribution.
-	we found that it was Uniform Distribution all along.
+	We stressed the FS with maximum file's size fs_write("file",buf,512) with the same file name - every write will delete the previosue file "file". we did it 
+        few thousends of times and monitored the Erase Number distribution. we found that it was Uniform Distribution all along.
 
- * VERY IMPORTANT - 	if you want to test the FS as stand alone you should take our fs.o (make, make all or make fs.o) and link it with flash.o (our's or your's), with tx.a and with y-o-u-r's ivt.o since our ivt.s has calls to functions related to other hardware such as LCD and input_panel and if you won't link it with LCD.o, input_panel.o etc, the linkage process will fail!
+
+ * VERY IMPORTANT 
+        if you want to test the FS as stand alone you should take our fs.o (make, make all or make fs.o) and link it with flash.o (our's or your's), with tx.a and 
+        with y-o-u-r's ivt.o since our ivt.o expect to be linked with functions related to other hardware such as LCD and input_panel and if you won't link it 
+        with LCD.o, input_panel.o etc, the linkage process will fail!
 			
 
 OPTIMIZATIONS
 -------------
-* Minimize used FLASH size - we were able to use 64KB flash size to support up to 105 files of 0.5Kb or up to 4710 files of 0Kb. read the FILE SYSTEM DESIGN section for detailed explanation
+* Minimize used FLASH size      - we were able to use 64KB flash size to support up to 105 files of 0.5Kb or up to 4710 files of 0Kb. read the FILE SYSTEM DESIGN section for detailed explanation
 
-* Minimize used ROM size - we squeeze all our code into 64KB ROM.
+* Minimize used ROM size        - we squeeze all our code into 64KB ROM.
 
-* Minimize used RAM size - we went all over global data structures and make sure we don't use more than we need.
-						   we used minimum stack size of 1024bytes per thread, we made sure this is more than enough by placing canaries (special values like 0xDEADBEEF or 0xABABABAB) at the end
-						   of the stack, stress the system and make sure that this value didn't overrun.
+* Minimize used RAM size        - we went all over global data structures and make sure we don't use more than we need.
+			          we used minimum stack size of 1024bytes per thread, we made sure this is more than enough by placing canaries (special values like 0xDEADBEEF or 0xABABABAB) at the end
+			          of the stack, stress the system and make sure that this value didn't overrun.
 						   
-						   we paied some RAM space to store data structure for the FileSystem. this DATS save us many many FLASH access and we think this is a good trade off since FLASH IO is relatively 
-						   slow and expensive.
+                                  we paied some RAM space to store data structure for the FileSystem. this DATS save us many many FLASH access and we think this is a good trade off since FLASH IO 
+                                  is relatively slow and expensive.
 							
 
-* Minimize power consumption - 	all threads waiting on events flag for an event such as packet arrives or user press a button which been set by the ISRs. no busy waiting at all!
-								we made the processor halt when system is idle. we did it by running thread with the lowest priority. this thread will run ONLY when all other threads
-								idle, this way the system will halt when there is no activity.
+* Minimize power consumption    - all threads waiting on events flag for an event such as packet arrives or user press a button which been set by the ISRs. no busy waiting at all!
+				  we made the processor halt when system is idle. we did it by running thread with the lowest priority. this thread will run ONLY when all other threads
+				  idle, this way the system will halt when there is no activity.
 								
 thanks,
 Avishai & Matan
