@@ -2,7 +2,7 @@
 #include "../flash/flash.h"
 #include "../common_defs.h"
 #include "../TX/tx_api.h"
-#include <string.h>
+//#include <string.h>
 
 #define FILE_NAME_MAX_LEN (8)
 #define ERASE_UNITS_NUMBER (FLASH_CAPACITY/FLASH_BLOCK_SIZE)

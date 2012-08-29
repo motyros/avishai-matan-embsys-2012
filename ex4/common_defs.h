@@ -36,6 +36,12 @@ typedef enum
 
 typedef unsigned int TX_STATUS;
 
+extern  void *  __PF  memcpy(void *__s1, const void *__s2, size_t __n);
+extern  void *  __PF  memset(void *__s, int __c, size_t __n);
+extern  char *      strncpy(char *__s1, const char *__s2, size_t __n);
+extern  int         strcmp(const char *__s1, const char *__s2);
+extern  size_t      strlen(const char *__s);
+
 #define TX_TICK_MS 5
 
 #ifdef DBG

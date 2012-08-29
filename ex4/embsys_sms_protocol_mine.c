@@ -1,5 +1,6 @@
 #include "embsys_sms_protocol_mine.h"
-#include <string.h>
+#include "common_defs.h"
+//#include <string.h>
 
 
 #define SWAP_BYTE_NIBBLE(b) (((b)&0xf)*0x10 + ((b)>>4))
