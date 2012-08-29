@@ -3,7 +3,7 @@ all: a.out
 flash.o: flash/flash.c flash/flash.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@
 
-fs.o: fs/fs.c fs/fs.h flash/flash.c flash/flash.h common_defs.h
+fs.o: fs/fs.c fs/fs.h flash/flash.h common_defs.h
 	mcc -c -a6 -g -w3 $< -o $@	
 
 input_panel.o: input_panel/input_panel.c input_panel/input_panel.h common_defs.h
@@ -33,9 +33,6 @@ embsys_sms_protocol_mine.o: embsys_sms_protocol_mine.c embsys_sms_protocol_mine.
 ivt.o: ivt.s
 	mcc -c -a6 -g -w3 $< -o $@
 
-main_orig.o: main.c TX/tx_api.h timer/timer.h common_defs.h smsController.h smsView.h smsModel.h flash/flash.h fs/fs.h 
-	mcc -c -a6 -g -w3 $< -o $@
-
 main.o: main.c TX/tx_api.h timer/timer.h common_defs.h smsController.h smsView.h smsModel.h
 	mcc -c -a6 -g -w3 $< -o $@
 
@@ -55,11 +52,11 @@ dumpbug:
 	gedit flash_dump.txt &
 	
 tar:
-	tar --exclude=".*" -cvjf avishl02_matanp01 input_panel LCD network timer TX common_defs.h device.svr3 embsys_sms_protocol_mine.c embsys_sms_protocol_mine.h ex3.args ivt.s  main.c makefile README smsModel.c smsModel.h smsView.c smsView.h smsController.c smsController.h 
+	tar --exclude=".*" -cvjf avishl02_matanp01 flash fs input_panel LCD network timer TX common_defs.h device.svr3 embsys_sms_protocol_mine.c embsys_sms_protocol_mine.h ex4.args ivt.s main.c makefile README smsModel.c smsModel.h smsView.c smsView.h smsController.c smsController.h 
 
 clean: 
 	rm -f avishl02_matanp01 a.out *.o
 
 test: clean all tar
-	~embsys/ARC/MetaWare/arc/bin/embsys_check_ex2.sh avishl02_matanp01
+	~embsys/ARC/MetaWare/arc/bin/embsys_check_ex4.sh avishl02_matanp01
 

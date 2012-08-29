@@ -654,15 +654,6 @@ void handleAddCharToEditSms(const char buttonX[])
         SMS_SUBMIT* inEditSms = modelGetInEditSms();
         if(gInEditContinuosNum > 0 || inEditSms->data_length == DATA_MAX_LENGTH)
         {
-        	//TODO*******************************************/
-        	int arrLen = ARRAY_CHAR_LEN(buttonX);
-        	int sizearr = strlen(buttonX);
-        	int sizeChar = sizeof(CHAR);
-        	if(gInEditContinuosNum >= 5)
-        	{
-        		int nums = gInEditContinuosNum % ARRAY_CHAR_LEN(buttonX);
-        	}
-        	//*************************************************/
                 //the specific char in this button according to the timer delay
                 int numChar = gInEditContinuosNum % ARRAY_CHAR_LEN(buttonX);
                 //replace the last char

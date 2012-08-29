@@ -46,28 +46,28 @@ we will focus on the FS design and on the optimization design.
 
 FILE SYSTEM DESIGN
 ------------------
- * we implemented a version of the article http://static.usenix.org/event/usenix05/tech/general/full_papers/gal/gal_html/.
+ * We implemented a version of the article http://static.usenix.org/event/usenix05/tech/general/full_papers/gal/gal_html/.
 
- * every 4Kb is called EraseUnit since this is the smallest unit the flash can erase
+ * Every 4Kb is called EraseUnit since this is the smallest unit the flash can erase
  
- * our 64Kb flash composed of 16 EraseUnits (blocks), our FS uses 15 EraseUnits to store files and one EraseUnit (a.k.a the Log) for compaction process (we will elaborate about that)
+ * Our 64Kb flash composed of 16 EraseUnits (blocks), our FS uses 15 EraseUnits to store files and one EraseUnit (a.k.a the Log) for compaction process (we will elaborate about that)
  
- * when file need to be written, we appilys First Fit Algorithm and place it at the first free slot we find.
+ * When file need to be written, we appilys First Fit Algorithm and place it at the first free slot we find.
  
- * when not enough free space been found, we try to compact some EraseUnit. we check if EraseUnit's free space + EraseUnit obsolete space (=space of deleted files) will be enough 
+ * When not enough free space been found, we try to compact some EraseUnit. we check if EraseUnit's free space + EraseUnit obsolete space (=space of deleted files) will be enough 
    to host the new file, if yes, we moving the valid files of the EraseUnit to the log, erasing the EraseUnit and converting it to the new log, the previous log will become regular EraseUnit 
    and will host the new file
    
- * to achieve atomicity, we took advantage of the fact that we using NOR flash in which bits been turn off. every such operation has "valid" bit, we performing the operation which leaving this valid bit
+ * To achieve atomicity, we took advantage of the fact that we using NOR flash in which bits been turn off. every such operation has "valid" bit, we performing the operation which leaving this valid bit
    as "1" and only then we changing this bit only to "0". this change is atomic since we turning off one bit only and this valid bit indicates that whole section is valid.
    
- * we developed fail safe mechanism to ensure that every operation either will succeed or fail without corrupting the FS no matter what happened (as long as no one from the outside change the flash bits)
+ * We developed fail safe mechanism to ensure that every operation either will succeed or fail without corrupting the FS no matter what happened (as long as no one from the outside change the flash bits)
    1. write file - every file has "valid" bit, if this bit wasen't set at the end of the write, we ignore the file (file will be considered as deleted)
    2. delete file - we implemented the delete operation as turning the "obsolete" bit of the file from 1 to 0, thus, this operation is atomic
    3. EraseUnit compaction - we saved the last 4 bytes of the Log to save some essential info about the compaction. when we loading the FS during boot, we check those 4 bytes, and if the "complete" bit is
       not '0' we continue from the point we failed last time (we know when we failed by some control bits inside those 4 bytes)
 	  
- * corruption from the outside - every EraseUnit has some special value (canary) after its header. when loading the FS during boot, we check those canaries, and if more than one is missing (one can be missing if
+ * Corruption from the outside - every EraseUnit has some special value (canary) after its header. when loading the FS during boot, we check those canaries, and if more than one is missing (one can be missing if
    during the block erase we crashed, if one canary is missing, we check that the EraseUnit is indeed the erase unit we wrote at the log's last 4 bytes) if so, we have a reason to believe our FS is corrupted by some
    attacker or by malfunction and we re-install the FS structure and getting new and empty FS.
    
@@ -85,13 +85,15 @@ FILE SYSTEM DESIGN
 
  * BONUS PART!!!
  
-	we implemented ware out mechanism. every EraseUnit has "Erase Number" which is the number of erasure this EraseUnit had. when we searching for block to erase (because we want to write file and don't have
+	We implemented ware out mechanism. every EraseUnit has "Erase Number" which is the number of erasure this EraseUnit had. when we searching for block to erase (because we want to write file and don't have
 	enough free space) we search for the EraseUnit with lowest Erase Number value which has enough space. this way will lead to uniform distribution of EraseUnits' erasures if we assume that when deleting a file every
 	file has the same probability to be deleted.
 				
-	we stressed the FS with maximum file's size fs_write("file",buf,512) with the same file name - every write will delete the previosue file "file". we did it few thousends of times and monitored the Erase Number distribution.
+	We stressed the FS with maximum file's size fs_write("file",buf,512) with the same file name - every write will delete the previosue file "file". we did it few thousends of times and monitored the Erase Number distribution.
 	we found that it was Uniform Distribution all along.
 
+ * VERY IMPORTANT - 	if you want to test the FS as stand alone you should take our fs.o (make, make all or make fs.o) and link it with flash.o (our's or your's), with tx.a and with y-o-u-r's ivt.o since our ivt.s has calls to functions related to other hardware such as LCD and input_panel and if you won't link it with LCD.o, input_panel.o etc, the linkage process will fail!
+			
 
 OPTIMIZATIONS
 -------------
